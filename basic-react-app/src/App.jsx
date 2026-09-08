@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import "./App.css";
 
 function App() {
-  const [activePage, setActivePage] = useState("Scan Product");
+  const [activePage, setActivePage] = useState("Dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const navItems = [
@@ -178,6 +178,9 @@ function App() {
 function ScanProductPage() {
 
   const [image, setImage] = useState(null);
+  const [imageFile, setImageFile] = useState(null);
+
+  const [scanResult, setScanResult] = useState(null);
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -211,14 +214,14 @@ function ScanProductPage() {
     }
   };
 
-  const captureImage = () => {
+  const captureImage = async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
     if (!video || !canvas) return;
 
     if (video.videoWidth === 0 || video.videoHeight === 0) {
-      alert("Camera is still loading. Please wait a moment.");
+      alert("Camera is still loading. Please wait.");
       return;
     }
 
@@ -235,13 +238,32 @@ function ScanProductPage() {
       video.videoHeight
     );
 
+    // For displaying preview
     const capturedImage = canvas.toDataURL(
       "image/jpeg",
       0.95
     );
 
     setImage(capturedImage);
+
+    // Convert captured image → Blob
+    const response = await fetch(capturedImage);
+    const blob = await response.blob();
+
+    // Convert Blob → File
+    const file = new File(
+      [blob],
+      "camera-capture.jpg",
+      {
+        type: "image/jpeg"
+      }
+    );
+
+    // This is what we'll send to FastAPI
+    setImageFile(file);
+
     setScanned(false);
+    setScanResult(null);
 
     stopCamera();
   };
@@ -300,27 +322,77 @@ function ScanProductPage() {
   };
 
 
-  const handleImageUpload = (event) => {
-
-    const file = event.target.files[0];
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
 
     if (!file) return;
 
-    const imageURL = URL.createObjectURL(file);
+    // Actual file → will be sent to backend
+    setImageFile(file);
 
+    // Preview → displayed in React
+    const imageURL = URL.createObjectURL(file);
     setImage(imageURL);
+
     setScanned(false);
+    setScanResult(null);
   };
 
 
-  const scanProduct = () => {
+  const scanProduct = async () => {
+    if (!imageFile) {
+      alert("Please upload or capture an image first.");
+      return;
+    }
 
     setLoading(true);
+    setScanResult(null);
 
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      // Create multipart/form-data
+      const formData = new FormData();
+
+      // IMPORTANT:
+      // Backend parameter is called "file"
+      formData.append("file", imageFile);
+
+      const response = await fetch(
+        "http://localhost:8000/scan",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `Backend returned ${response.status}`
+        );
+      }
+
+      // Convert backend JSON response into JavaScript object
+      const result = await response.json();
+
+      console.log("Backend result:", result);
+
+      // Store result in React state
+      setScanResult(result);
+
       setScanned(true);
-    }, 1200);
+
+    } catch (error) {
+
+      console.error("Scan failed:", error);
+
+      alert(
+        "Unable to scan the image. Please check that the backend is running."
+      );
+
+    } finally {
+
+      setLoading(false);
+
+    }
   };
 
 

@@ -1,13 +1,15 @@
-from fastapi import FastAPI, UploadFile, File, Depends
-from sqlalchemy.orm import Session
-import json
-import shutil
-import uuid
-import os
 
-from database import Base, engine, SessionLocal
 import models
-from ocr_pipeline import run_ocr_pipeline
+from database import Base, engine, SessionLocal
+import uuid
+import shutil
+import json
+from sqlalchemy.orm import Session
+from fastapi import FastAPI, UploadFile, File, Depends
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "ocr"))
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,6 +26,7 @@ def get_db():
 
 @app.post("/scan")
 def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    from ocr_pipeline import run_ocr_pipeline
     temp_filename = f"temp_{uuid.uuid4().hex}.jpg"
     with open(temp_filename, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)

@@ -6,11 +6,11 @@ structure from ocr_pipeline.py V2. This is what Theme B/C should actually
 call for a real product (which usually has several photos).
 """
 
-from ocr_pipeline import run_ocr_pipeline
+from .ocr_pipeline import run_ocr_pipeline
 
 
 def aggregate_product_images(product_id, image_paths, languages=('en',),
-                              cascade_mode=True, confidence_threshold=0.60):
+                             cascade_mode=True, confidence_threshold=0.60):
     """
     Runs the OCR pipeline on every image belonging to one product.
     Uses cascade_mode by default now (adapts speed per image automatically)
@@ -75,7 +75,8 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 3:
-        print("Usage: python multi_image.py <product_id> <image1.jpg> [image2.jpg ...]")
+        print(
+            "Usage: python multi_image.py <product_id> <image1.jpg> [image2.jpg ...]")
         sys.exit(1)
 
     product_id = sys.argv[1]
@@ -92,4 +93,5 @@ if __name__ == "__main__":
         print(f"  {field:15s}: \"{best['text']}\" "
               f"[{best['confidence']:.2f}, {best['status']}] (from {best['source_image']})")
         if len(candidates) > 1:
-            print(f"                   ({len(candidates)-1} other candidate(s) also found)")
+            print(
+                f"                   ({len(candidates)-1} other candidate(s) also found)")

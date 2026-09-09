@@ -114,16 +114,6 @@ def image_quality(image):
         gray = image
     else:
         gray = to_grayscale(image)
-    """
-    Handles both color (3-channel) and already-grayscale (1-channel) input -
-    needed because the fallback variant chosen when "original" isn't
-    available might already be grayscale (e.g. "binarized"), and forcing
-    another grayscale conversion on an already-grayscale image crashes.
-    """
-    if len(image.shape) == 2 or image.shape[2] == 1:
-        gray = image
-    else:
-        gray = to_grayscale(image)
     return {
         "width": int(image.shape[1]),
         "height": int(image.shape[0]),
@@ -211,13 +201,6 @@ def generate_variants(
     container. This is an explicit choice, not automatic detection (per
     the "don't blindly run this on every image" guidance).
     """
-    """
-    curved_mode: if True, ALSO produces strip-based variants for curved
-    surfaces (bottles/cans). Off by default because it triples OCR calls
-    for those strips - only turn on when you know the product is a curved
-    container. This is an explicit choice, not automatic detection (per
-    the "don't blindly run this on every image" guidance).
-    """
     log = logger_instance or logger
 
     original = cap_max_dimension(load_image(image_path), max_dim)
@@ -236,12 +219,7 @@ def generate_variants(
         "grayscale_contrast": lambda: contrast,
         "denoised_sharpened": lambda: sharpen(denoised),
         "binarized": lambda: binarize(contrast),
-        "grayscale_contrast": lambda: contrast,
-        "denoised_sharpened": lambda: sharpen(denoised),
-        "binarized": lambda: binarize(contrast),
         "deskewed": lambda: deskew(gray),
-        "upscaled": lambda: upscale(contrast, 1.5),
-        "perspective_corrected": lambda: correct_perspective(gray),
         "upscaled": lambda: upscale(contrast, 1.5),
         "perspective_corrected": lambda: correct_perspective(gray),
     }

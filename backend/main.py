@@ -7,6 +7,8 @@ import shutil
 import json
 from sqlalchemy.orm import Session
 from fastapi import FastAPI, UploadFile, File, Depends
+from fastapi import FastAPI, UploadFile, File, Form, Depends
+from typing import List
 
 
 Base.metadata.create_all(bind=engine)
@@ -89,5 +91,55 @@ def history(db: Session = Depends(get_db)):
 
 
 @app.post("/batch")
-def batch():
-    return {"message": "batch endpoint placeholder"}
+def batch(
+    product_id: str = Form(...),
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db)
+):
+    from ocr.multi_image import aggregate_product_images
+
+    temp_paths = []
+    for f in files:
+        temp_path = f"temp_{uuid.uuid4().hex}.jpg"
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(f.file, buffer)
+        temp_paths.append(temp_path)
+
+    try:
+        result = aggregate_product_images(product_id, temp_paths)
+    finally:
+        for path in temp_paths:
+            os.remove(path)
+
+    fields = {}
+    for field, candidates in result["candidates_by_field"].items():
+        best = candidates[0]
+        fields[field] = {
+            "value": best["text"],
+            "confidence": best["confidence"],
+            "status": best["status"],
+            "source_image": best["source_image"]
+        }
+
+    batch_id = uuid.uuid4().hex[:8]
+
+    db_scan = models.Scan(
+        scan_id=batch_id,
+        product_id=product_id,
+        product_name="unknown",
+        category="unknown",
+        overall_status="pending_extraction",
+        violation_type=None,
+        fields_json=json.dumps(fields),
+        raw_ocr_json=json.dumps(result["combined_lines"])
+    )
+    db.add(db_scan)
+    db.commit()
+    db.refresh(db_scan)
+
+    return {
+        "batch_id": batch_id,
+        "product_id": product_id,
+        "images_processed": result["images_processed"],
+        "fields": fields
+    }

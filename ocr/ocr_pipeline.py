@@ -5,7 +5,7 @@ import easyocr
 from .preprocessing import generate_variants, image_quality
 
 
-from preprocessing import generate_variants, image_quality
+from .preprocessing import generate_variants, image_quality
 
 logger = logging.getLogger(__name__)
 

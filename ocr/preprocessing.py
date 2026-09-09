@@ -202,8 +202,6 @@ def generate_variants(
     enabled_variants=None,
     curved_mode=False,
     curved_strip_count=3,
-    curved_mode=False,
-    curved_strip_count=3,
     logger_instance=None
 ):
     """

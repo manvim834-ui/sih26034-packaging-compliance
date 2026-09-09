@@ -7,7 +7,7 @@ import shutil
 import json
 from sqlalchemy.orm import Session
 from fastapi import FastAPI, UploadFile, File, Depends
-from fastapi import FastAPI, UploadFile, File, Form, Depends
+from fastapi import FastAPI, UploadFile, File, Form, Depends, HTTPException
 from typing import List
 
 
@@ -38,14 +38,31 @@ def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
     from rules.classifier import classify_package
     from rules.rule_engine import run_rule_engine
 
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=400, detail="Uploaded file must be an image (jpg, png, etc.)")
+
     temp_filename = f"temp_{uuid.uuid4().hex}.jpg"
     with open(temp_filename, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        ocr_result = run_ocr_pipeline(temp_filename, keep_all_variants=False)
+        try:
+            ocr_result = run_ocr_pipeline(
+                temp_filename, keep_all_variants=False)
+        except Exception as e:
+            raise HTTPException(
+                status_code=422, detail=f"Could not process image: {str(e)}")
     finally:
         os.remove(temp_filename)
+
+    if ocr_result["status"] == "no_text_detected":
+        return {
+            "scan_id": None,
+            "overall_status": "no_text_detected",
+            "message": "No readable text was found on this image. Try a clearer, well-lit photo.",
+            "fields": {}
+        }
 
     package_type = classify_package(ocr_result["lines"])
     compliance_result = run_rule_engine(
@@ -93,6 +110,25 @@ def history(db: Session = Depends(get_db)):
             "fields": json.loads(s.fields_json)
         })
     return result
+
+
+@app.get("/scans/{scan_id}")
+def get_scan(scan_id: str, db: Session = Depends(get_db)):
+    scan = db.query(models.Scan).filter(models.Scan.scan_id == scan_id).first()
+
+    if not scan:
+        raise HTTPException(
+            status_code=404, detail=f"No scan found with scan_id '{scan_id}'")
+
+    return {
+        "scan_id": scan.scan_id,
+        "product_id": scan.product_id,
+        "product_name": scan.product_name,
+        "category": scan.category,
+        "overall_status": scan.overall_status,
+        "violation_type": scan.violation_type,
+        "fields": json.loads(scan.fields_json)
+    }
 
 
 @app.post("/batch")

@@ -1,6 +1,34 @@
 import { useRef, useState } from "react";
 import "./App.css";
 
+const formatFieldName = (name) => {
+  return name
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const displayFieldValue = (value) => {
+  if (value === null || value === undefined) {
+    return "Not detected";
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, val]) => {
+        const formattedKey = formatFieldName(key);
+
+        if (typeof val === "boolean") {
+          return `${formattedKey}: ${val ? "Yes" : "No"}`;
+        }
+
+        return `${formattedKey}: ${val ?? "N/A"}`;
+      })
+      .join(" | ");
+  }
+
+  return String(value);
+};
+
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -279,47 +307,7 @@ function ScanProductPage() {
     setCameraOpen(false);
   };
 
-  const result = {
-    verdict: "NON_COMPLIANT",
 
-    fields: [
-      {
-        name: "Maximum Retail Price",
-        value: "₹120",
-        status: "PASS",
-        confidence: 96,
-        rule: "MRP declaration detected correctly.",
-      },
-      {
-        name: "Net Quantity",
-        value: "500 g",
-        status: "PASS",
-        confidence: 94,
-        rule: "Net quantity and unit are present.",
-      },
-      {
-        name: "Manufacturer Details",
-        value: "ABC Foods Pvt. Ltd.",
-        status: "PASS",
-        confidence: 91,
-        rule: "Manufacturer information detected.",
-      },
-      {
-        name: "Manufacturing Date",
-        value: "Not detected",
-        status: "FAIL",
-        confidence: 0,
-        rule: "Mandatory manufacturing/packing declaration was not detected.",
-      },
-      {
-        name: "Consumer Care",
-        value: "1800-123-456",
-        status: "REVIEW",
-        confidence: 72,
-        rule: "Information detected, but OCR confidence is low.",
-      },
-    ],
-  };
 
 
   const handleImageUpload = (e) => {
@@ -349,11 +337,8 @@ function ScanProductPage() {
     setScanResult(null);
 
     try {
-      // Create multipart/form-data
       const formData = new FormData();
 
-      // IMPORTANT:
-      // Backend parameter is called "file"
       formData.append("file", imageFile);
 
       const response = await fetch(
@@ -365,33 +350,23 @@ function ScanProductPage() {
       );
 
       if (!response.ok) {
-        throw new Error(
-          `Backend returned ${response.status}`
-        );
+        throw new Error(`Backend returned ${response.status}`);
       }
 
-      // Convert backend JSON response into JavaScript object
       const result = await response.json();
 
       console.log("Backend result:", result);
 
-      // Store result in React state
+      // IMPORTANT
       setScanResult(result);
 
       setScanned(true);
-
     } catch (error) {
-
       console.error("Scan failed:", error);
 
-      alert(
-        "Unable to scan the image. Please check that the backend is running."
-      );
-
+      alert("Unable to scan the image.");
     } finally {
-
       setLoading(false);
-
     }
   };
 
@@ -543,7 +518,7 @@ function ScanProductPage() {
                   className="product-image"
                 />
 
-                {scanned && (
+                {/* {scanned && (
                   <>
                     <div className="bounding-box box-one">
                       MRP
@@ -553,7 +528,7 @@ function ScanProductPage() {
                       NET QTY
                     </div>
                   </>
-                )}
+                )} */}
 
               </div>
 
@@ -568,7 +543,9 @@ function ScanProductPage() {
                   className="secondary-button"
                   onClick={() => {
                     setImage(null);
+                    setImageFile(null);
                     setScanned(false);
+                    setScanResult(null);
                   }}
                 >
                   Change Image
@@ -651,159 +628,148 @@ function ScanProductPage() {
 
           {/* RESULTS */}
 
-          {scanned && (
+          {scanResult && (
+            <div className="result-container">
 
-            <>
-
-              {/* RESULT HEADER */}
-
-              <div className="result-heading">
+              {/* OVERALL RESULT */}
+              <div className="result-header">
 
                 <div>
+                  <h2>Compliance Result</h2>
 
-                  <div className="result-label">
-                    COMPLIANCE RESULT
+                  <p>
+                    Scan ID: <strong>{scanResult.scan_id}</strong>
+                  </p>
+
+                  <p>
+                    Package Type:{" "}
+                    <strong>
+                      {scanResult.package_type
+                        ? formatFieldName(scanResult.package_type)
+                        : "N/A"}
+                    </strong>
+                  </p>
+                </div>
+
+                <div
+                  className={`overall-status ${scanResult.overall_status === "COMPLIANT"
+                    ? "compliant"
+                    : "non-compliant"
+                    }`}
+                >
+                  {scanResult.overall_status?.replaceAll("_", " ")}
+                </div>
+
+              </div>
+
+
+              {/* VIOLATIONS */}
+              {scanResult.violation_type && (
+                <div className="violations-section">
+
+                  <h3>Detected Violations</h3>
+
+                  <div className="violation-list">
+
+                    {scanResult.violation_type
+                      .split(",")
+                      .map((violation, index) => (
+                        <span
+                          className="violation-badge"
+                          key={index}
+                        >
+                          {formatFieldName(violation.trim())}
+                        </span>
+                      ))}
+
                   </div>
 
-                  <h3>
-                    Scan Analysis
-                  </h3>
-
                 </div>
+              )}
 
 
-                <div className="verdict non-compliant">
-                  × Non-Compliant
-                </div>
+              {/* DECLARATION CHECKS */}
+              <div className="fields-section">
 
-              </div>
+                <h3>Declaration Checks</h3>
 
+                <div className="fields-grid">
 
-              {/* SUMMARY */}
+                  {Object.entries(scanResult.fields || {}).map(
+                    ([fieldName, fieldData]) => (
 
-              <div className="summary">
+                      <div
+                        className="field-card"
+                        key={fieldName}
+                      >
 
-                <div>
-                  <span>5</span>
-                  <p>Fields Checked</p>
-                </div>
-
-                <div>
-                  <span>3</span>
-                  <p>Passed</p>
-                </div>
-
-                <div>
-                  <span>1</span>
-                  <p>Violations</p>
-                </div>
-
-              </div>
-
-
-              {/* FIELD LIST */}
-
-              <div className="field-list">
-
-                {result.fields.map((field, index) => {
-
-                  const statusClass =
-                    field.status === "PASS"
-                      ? "pass"
-                      : field.status === "FAIL"
-                        ? "fail"
-                        : "review";
-
-
-                  return (
-
-                    <div
-                      className={`field-card ${statusClass}`}
-                      key={index}
-                    >
-
-                      <div className="field-top">
-
-                        <div>
-
-                          <span className="field-name">
-                            {field.name}
-                          </span>
-
+                        <div className="field-card-header">
                           <h4>
-                            {field.value}
+                            {formatFieldName(fieldName)}
                           </h4>
 
-                        </div>
-
-
-                        <span
-                          className={`status-badge ${statusClass}`}
-                        >
-                          {field.status === "PASS"
-                            ? "Passed"
-                            : field.status === "FAIL"
-                              ? "Failed"
-                              : "Needs Review"
-                          }
-                        </span>
-
-                      </div>
-
-
-                      {/* CONFIDENCE */}
-
-                      <div className="confidence">
-
-                        <div className="confidence-header">
-
-                          <span>
-                            OCR Confidence
-                          </span>
-
-                          <span>
-                            {field.confidence}%
+                          <span
+                            className={`field-status ${fieldData.status === "PASS"
+                              ? "pass"
+                              : fieldData.status === "FAIL"
+                                ? "fail"
+                                : "not-applicable"
+                              }`}
+                          >
+                            {fieldData.status?.replaceAll("_", " ")}
                           </span>
 
                         </div>
 
 
-                        <div className="confidence-bar">
+                        <div className="field-content">
 
-                          <div
-                            className={`confidence-fill ${statusClass}`}
-                            style={{
-                              width: `${field.confidence}%`,
-                            }}
-                          />
+                          <p>
+                            <strong>Detected Value</strong>
+                          </p>
+
+                          <p className="detected-value">
+                            {displayFieldValue(fieldData.value)}
+                          </p>
+
+
+                          {fieldData.reason && (
+                            <>
+                              <p>
+                                <strong>Reason</strong>
+                              </p>
+
+                              <p>
+                                {fieldData.reason}
+                              </p>
+                            </>
+                          )}
+
+
+                          {/* {fieldData.legal_reference && (
+                            <div className="legal-reference">
+
+                              <strong>
+                                Legal Reference:
+                              </strong>{" "}
+
+                              {fieldData.legal_reference}
+
+                            </div>
+                          )} */}
 
                         </div>
 
                       </div>
 
+                    )
+                  )}
 
-                      {/* RULE */}
-
-                      <div className="rule-text">
-
-                        <strong>
-                          Rule Check:
-                        </strong>{" "}
-
-                        {field.rule}
-
-                      </div>
-
-                    </div>
-
-                  );
-
-                })}
+                </div>
 
               </div>
 
-            </>
-
+            </div>
           )}
 
         </section>

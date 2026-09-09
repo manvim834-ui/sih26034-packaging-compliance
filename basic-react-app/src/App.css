@@ -1696,3 +1696,424 @@ input {
 .capture-button:hover {
   transform: translateY(-1px);
 }
+
+/* =========================================================
+   SCAN RESULT UI
+   ========================================================= */
+
+.result-container {
+  width: 100%;
+  margin-top: 0;
+}
+
+
+/* =========================================================
+   RESULT HEADER
+   ========================================================= */
+
+.result-header {
+  background: linear-gradient(135deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid #e3eaf3;
+  border-radius: 18px;
+
+  padding: 24px 26px;
+  margin-bottom: 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
+}
+
+.result-header h2 {
+  margin: 0 0 12px;
+
+  font-size: 27px;
+  font-weight: 700;
+
+  color: #0f2347;
+}
+
+.result-header p {
+  margin: 7px 0;
+
+  font-size: 16px;
+  color: #475569;
+}
+
+.result-header strong {
+  color: #17345f;
+}
+
+
+/* =========================================================
+   OVERALL STATUS
+   ========================================================= */
+
+.overall-status {
+  min-width: 170px;
+
+  padding: 13px 20px;
+
+  border-radius: 30px;
+
+  text-align: center;
+
+  font-size: 15px;
+  font-weight: 700;
+
+  white-space: nowrap;
+}
+
+.overall-status.compliant {
+  background: #dcfce7;
+  color: #15803d;
+
+  border: 1px solid #bbf7d0;
+}
+
+.overall-status.non-compliant {
+  background: #fee2e2;
+  color: #b91c1c;
+
+  border: 1px solid #fecaca;
+}
+
+
+/* =========================================================
+   DETECTED VIOLATIONS
+   ========================================================= */
+
+.violations-section {
+  background: #ffffff;
+
+  border: 1px solid #e3eaf3;
+  border-radius: 18px;
+
+  padding: 22px 26px;
+
+  margin-bottom: 20px;
+
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.04);
+}
+
+.violations-section h3 {
+  margin: 0 0 15px;
+
+  font-size: 20px;
+  font-weight: 700;
+
+  color: #102b52;
+}
+
+.violation-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.violation-badge {
+  display: inline-flex;
+  align-items: center;
+
+  padding: 9px 15px;
+
+  background: #fee2e2;
+  color: #b42323;
+
+  border: 1px solid #fecaca;
+
+  border-radius: 22px;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  transition: all 0.2s ease;
+}
+
+.violation-badge:hover {
+  background: #fecaca;
+  transform: translateY(-1px);
+}
+
+
+/* =========================================================
+   DECLARATION CHECKS SECTION
+   ========================================================= */
+
+.fields-section {
+  background: #f8fbff;
+
+  border: 1px solid #e3eaf3;
+  border-radius: 18px;
+
+  padding: 22px;
+
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.04);
+}
+
+.fields-section>h3 {
+  margin: 0 0 18px;
+
+  font-size: 21px;
+  font-weight: 700;
+
+  color: #102b52;
+}
+
+
+/* =========================================================
+   FIELD GRID
+   ========================================================= */
+
+.fields-grid {
+  display: grid;
+
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  gap: 14px;
+}
+
+
+/* =========================================================
+   INDIVIDUAL FIELD CARD
+   ========================================================= */
+
+.field-card {
+  background: #ffffff;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 15px;
+
+  overflow: hidden;
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
+}
+
+.field-card:hover {
+  transform: translateY(-2px);
+
+  border-color: #cbd5e1;
+
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+}
+
+
+/* =========================================================
+   FIELD CARD HEADER
+   ========================================================= */
+
+.field-card-header {
+  min-height: 62px;
+
+  padding: 6px 1px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 12px;
+
+  border-bottom: 1px solid #edf1f5;
+}
+
+.field-card-header h4 {
+  margin: 0;
+
+  font-size: 15px;
+  font-weight: 700;
+
+  color: #102b52;
+}
+
+
+/* =========================================================
+   FIELD STATUS BADGES
+   ========================================================= */
+
+.field-status {
+  flex-shrink: 0;
+
+  padding: 6px 11px;
+
+  border-radius: 18px;
+
+  font-size: 11px;
+  font-weight: 700;
+
+  letter-spacing: 0.3px;
+}
+
+.field-status.pass {
+  background: #dcfce7;
+  color: #15803d;
+
+  border: 1px solid #bbf7d0;
+}
+
+.field-status.fail {
+  background: #fee2e2;
+  color: #dc2626;
+
+  border: 1px solid #fecaca;
+}
+
+.field-status.not-applicable {
+  background: #f1f5f9;
+  color: #64748b;
+
+  border: 1px solid #e2e8f0;
+}
+
+
+/* =========================================================
+   FIELD CONTENT
+   ========================================================= */
+
+.field-content {
+  padding: 1px 1px 1px;
+}
+
+.field-content p {
+  margin: 6px 0;
+
+  font-size: 13px;
+
+  line-height: 1.5;
+
+  color: #64748b;
+}
+
+.field-content p strong {
+  color: #475569;
+
+  font-size: 12px;
+
+  font-weight: 600;
+}
+
+
+/* =========================================================
+   DETECTED VALUE
+   ========================================================= */
+
+.detected-value {
+  margin-top: 5px !important;
+  margin-bottom: 14px !important;
+
+  color: #1e3a5f !important;
+
+  font-size: 13px !important;
+  font-weight: 500;
+}
+
+
+/* =========================================================
+   REASON
+   ========================================================= */
+
+.field-content p:nth-of-type(3) {
+  color: #64748b;
+}
+
+
+/* =========================================================
+   LEGAL REFERENCE
+   ========================================================= */
+
+.legal-reference {
+  margin-top: 14px;
+
+  padding: 9px 11px;
+
+  background: #f8fafc;
+
+  border: 1px solid #edf2f7;
+
+  border-radius: 8px;
+
+  font-size: 11px;
+
+  line-height: 1.5;
+
+  color: #64748b;
+}
+
+.legal-reference strong {
+  color: #475569;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+
+  .fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .result-header {
+    align-items: flex-start;
+  }
+
+}
+
+
+@media (max-width: 700px) {
+
+  .result-header {
+    flex-direction: column;
+    align-items: stretch;
+
+    padding: 20px;
+  }
+
+  .result-header h2 {
+    font-size: 23px;
+  }
+
+  .overall-status {
+    width: 100%;
+  }
+
+  .violations-section,
+  .fields-section {
+    padding: 18px;
+  }
+
+  .fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+}
+
+
+@media (max-width: 480px) {
+
+  .result-header h2 {
+    font-size: 21px;
+  }
+
+  .result-header p {
+    font-size: 14px;
+  }
+
+  .violation-badge {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .field-card-header h4 {
+    font-size: 14px;
+  }
+
+}

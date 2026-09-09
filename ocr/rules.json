@@ -1,0 +1,316 @@
+{
+  "package_types": {
+    "retail": {
+      "description": "Standard retail pre-packaged commodity"
+    },
+    "wholesale": {
+      "description": "Wholesale package governed by Rule 24"
+    },
+    "multi_piece": {
+      "description": "Two or more identical individually packaged pieces sold together"
+    },
+    "combination": {
+      "description": "Two or more dissimilar commodities packaged together"
+    },
+    "group": {
+      "description": "Two or more similar but not identical commodities packaged together"
+    },
+    "e_commerce": {
+      "description": "Online/e-commerce listing"
+    }
+  },
+
+  "fields": {
+
+    "manufacturer_info": {
+      "required": true,
+      "applies_when": [
+        "retail",
+        "wholesale",
+        "multi_piece",
+        "combination",
+        "group",
+        "e_commerce"
+      ],
+      "validator": "validate_manufacturer_info",
+      "legal_reference": "Rule 6(1)(a)",
+      "requirements": {
+        "name": true,
+        "address": true,
+        "qualifying_words": [
+          "manufactured by",
+          "packed by",
+          "imported by"
+        ]
+      }
+    },
+
+    "generic_name": {
+      "required": true,
+      "applies_when": [
+        "retail",
+        "multi_piece",
+        "combination",
+        "group",
+        "e_commerce"
+      ],
+      "validator": "validate_generic_name",
+      "legal_reference": "Rule 6(1)(b)",
+      "requirements": {
+        "common_or_generic_name": true,
+        "multiple_products_require_each_name_and_quantity": true
+      }
+    },
+
+    "net_quantity": {
+      "required": true,
+      "applies_when": [
+        "retail",
+        "multi_piece",
+        "combination",
+        "group",
+        "e_commerce"
+      ],
+      "validator": "validate_net_quantity",
+      "legal_reference": "Rule 6(1)(c), Rules 11-13",
+      "requirements": {
+        "standard_metric_unit": true,
+        "below_1kg_use_grams": true,
+        "at_or_above_1kg_use_kilograms": true,
+        "below_1L_use_millilitres": true,
+        "at_or_above_1L_use_litres": true,
+        "below_1m_use_centimetres": true,
+        "at_or_above_1m_use_metres": true,
+        "non_si_units_prohibited": true,
+        "misleading_quantity_words_prohibited": [
+          "minimum",
+          "not less than",
+          "average",
+          "about",
+          "approximately"
+        ]
+      }
+    },
+
+    "mfg_date": {
+      "required": true,
+      "applies_when": [
+        "retail",
+        "multi_piece",
+        "combination",
+        "group"
+      ],
+      "validator": "validate_mfg_date",
+      "legal_reference": "Rule 6(1)(d)",
+      "description": "Month and year of manufacture, pre-packing, or import",
+      "field_exemptions": [
+        "bidis",
+        "incense_sticks",
+        "domestic_lpg_cylinders",
+        "cosmetics",
+        "seeds"
+      ]
+    },
+
+    "mrp": {
+      "required": true,
+      "applies_when": [
+        "retail",
+        "multi_piece",
+        "combination",
+        "group",
+        "e_commerce"
+      ],
+      "validator": "validate_mrp",
+      "legal_reference": "Rule 6(1)(e)",
+      "requirements": {
+        "currency": [
+          "Rs.",
+          "₹"
+        ],
+        "inclusive_of_all_taxes": true,
+        "accepted_phrasing": [
+          "Maximum retail price",
+          "Max. retail price",
+          "MRP"
+        ]
+      },
+      "field_exemptions": [
+        "domestic_lpg_cylinders"
+      ]
+    },
+
+    "consumer_care": {
+      "required": true,
+      "applies_when": [
+        "retail",
+        "multi_piece",
+        "combination",
+        "group",
+        "e_commerce"
+      ],
+      "validator": "validate_consumer_care",
+      "legal_reference": "Rule 6(2)",
+      "requirements": {
+        "name": true,
+        "address": true,
+        "telephone": true,
+        "email_if_available": true
+      }
+    },
+
+    "unit_sale_price": {
+      "required": true,
+      "applies_when": [
+        "retail",
+        "e_commerce"
+      ],
+      "validator": "validate_unit_sale_price",
+      "legal_reference": "Rule 6(11), amended 2022",
+      "requirements": {
+        "currency_rupees": true,
+        "decimal_places": 2,
+        "weight_under_1kg": "per gram",
+        "weight_at_least_1kg": "per kilogram",
+        "length_under_1m": "per centimetre",
+        "length_at_least_1m": "per metre",
+        "volume_under_1L": "per millilitre",
+        "volume_at_least_1L": "per litre",
+        "countable_items": "per number/unit"
+      },
+      "exemptions": [
+        "retail_sale_price_equals_unit_sale_price",
+        "multi_piece_package",
+        "combination_package",
+        "group_package",
+        "wholesale_package",
+        "alcoholic_beverage_or_spirituous_liquor"
+      ]
+    },
+
+    "country_of_origin": {
+      "required": true,
+      "applies_when": [
+        "imported",
+        "e_commerce"
+      ],
+      "validator": "validate_country_of_origin",
+      "legal_reference": "Rule 10 / 2017 e-commerce amendment",
+      "requirements": {
+        "imported_package": true,
+        "indian_packer_importer_name_and_address_if_packed_in_india": true
+      }
+    }
+  },
+
+  "wholesale_rules": {
+    "legal_reference": "Rule 24",
+    "required_declarations": [
+      "manufacturer_info",
+      "generic_name",
+      "net_quantity"
+    ],
+    "not_required": [
+      "mrp",
+      "consumer_care",
+      "unit_sale_price"
+    ]
+  },
+
+  "exemptions": {
+    "full_chapter_ii": [
+      {
+        "id": "large_package",
+        "condition": "Package contains more than 25 kg or 25 litres",
+        "legal_reference": "Rule 3"
+      },
+      {
+        "id": "industrial_or_institutional_consumer",
+        "condition": "Package meant for industrial or institutional consumers and purchased directly from manufacturer for own use",
+        "legal_reference": "Rule 3"
+      }
+    ],
+
+    "rule_26": [
+      {
+        "id": "very_small_package",
+        "condition": "Net weight or measure is 10 g or 10 ml or less",
+        "legal_reference": "Rule 26"
+      },
+      {
+        "id": "restaurant_fast_food",
+        "condition": "Fast food packed by restaurants or hotels",
+        "legal_reference": "Rule 26"
+      },
+      {
+        "id": "drug_formulation",
+        "condition": "Scheduled or non-scheduled drug formulations covered by Drugs (Price Control) Order, 1995",
+        "legal_reference": "Rule 26"
+      },
+      {
+        "id": "agricultural_farm_produce",
+        "condition": "Agricultural farm produce in packages above 50 kg",
+        "legal_reference": "Rule 26"
+      },
+      {
+        "id": "loose_ecommerce",
+        "condition": "Loose commodity sold through e-commerce where consumer already knows type and quantity ordered, subject to manufacturer/brand disclosure",
+        "legal_reference": "Rule 26 / 2023 amendment"
+      }
+    ]
+  },
+
+  "field_specific_exemptions": {
+    "mfg_date": [
+      {
+        "product_type": "bidis",
+        "legal_reference": "Rule 6(1)(d) exemption"
+      },
+      {
+        "product_type": "incense_sticks",
+        "legal_reference": "Rule 6(1)(d) exemption"
+      },
+      {
+        "product_type": "domestic_lpg_cylinder",
+        "legal_reference": "Rule 6(1)(d) exemption"
+      },
+      {
+        "product_type": "cosmetics",
+        "legal_reference": "Drugs and Cosmetics Rules, 1945"
+      },
+      {
+        "product_type": "seeds",
+        "legal_reference": "Seeds Act, 1966"
+      }
+    ],
+
+    "mrp": [
+      {
+        "product_type": "domestic_lpg_cylinder",
+        "legal_reference": "Administrative Price Mechanism / Rule 6(1)(e) exemption"
+      }
+    ]
+  },
+
+  "photo_check_scope": {
+    "manual_review_only": [
+      {
+        "check": "font_height",
+        "legal_reference": "Rule 7(2)",
+        "reason": "Requires physical scale reference"
+      },
+      {
+        "check": "clear_space_around_quantity",
+        "legal_reference": "Rule 8(1)",
+        "reason": "Requires reliable physical/image measurement"
+      }
+    ],
+    "out_of_scope": [
+      {
+        "check": "maximum_permissible_error",
+        "legal_reference": "First Schedule",
+        "reason": "Requires physically weighing or measuring the product"
+      }
+    ]
+  }
+}

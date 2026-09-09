@@ -35,6 +35,9 @@ def get_db():
 @app.post("/scan")
 def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
     from ocr.ocr_pipeline import run_ocr_pipeline
+    from rules.classifier import classify_package
+    from rules.rule_engine import run_rule_engine
+
     temp_filename = f"temp_{uuid.uuid4().hex}.jpg"
     with open(temp_filename, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -44,23 +47,25 @@ def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
     finally:
         os.remove(temp_filename)
 
-    scan_id = uuid.uuid4().hex[:8]
+    package_type = classify_package(ocr_result["lines"])
+    compliance_result = run_rule_engine(
+        ocr_result["lines"], package_type=package_type)
 
-    fake_fields = {
-        "manufacturer_name": {"value": "not_extracted_yet", "status": "pending"},
-        "net_quantity": {"value": "not_extracted_yet", "status": "pending"},
-        "mfg_date": {"value": "not_extracted_yet", "status": "pending"},
-        "mrp": {"value": "not_extracted_yet", "status": "pending"}
-    }
+    fields = compliance_result["fields"]
+    overall_status = compliance_result["overall_verdict"]
+    failed_fields = [f for f, r in fields.items() if r["status"] == "FAIL"]
+    violation_type = ", ".join(failed_fields) if failed_fields else None
+
+    scan_id = uuid.uuid4().hex[:8]
 
     db_scan = models.Scan(
         scan_id=scan_id,
         product_id="unknown",
         product_name="unknown",
         category="unknown",
-        overall_status="pending_extraction",
-        violation_type=None,
-        fields_json=json.dumps(fake_fields),
+        overall_status=overall_status,
+        violation_type=violation_type,
+        fields_json=json.dumps(fields),
         raw_ocr_json=json.dumps(ocr_result)
     )
     db.add(db_scan)
@@ -69,10 +74,10 @@ def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
     return {
         "scan_id": scan_id,
-        "ocr_status": ocr_result["status"],
-        "overall_confidence": ocr_result["overall_confidence"],
-        "lines_detected": len(ocr_result["lines"]),
-        "fields": fake_fields
+        "package_type": package_type,
+        "overall_status": overall_status,
+        "violation_type": violation_type,
+        "fields": fields
     }
 
 
@@ -97,6 +102,8 @@ def batch(
     db: Session = Depends(get_db)
 ):
     from ocr.multi_image import aggregate_product_images
+    from rules.classifier import classify_package
+    from rules.rule_engine import run_rule_engine
 
     temp_paths = []
     for f in files:
@@ -111,15 +118,14 @@ def batch(
         for path in temp_paths:
             os.remove(path)
 
-    fields = {}
-    for field, candidates in result["candidates_by_field"].items():
-        best = candidates[0]
-        fields[field] = {
-            "value": best["text"],
-            "confidence": best["confidence"],
-            "status": best["status"],
-            "source_image": best["source_image"]
-        }
+    package_type = classify_package(result["combined_lines"])
+    compliance_result = run_rule_engine(
+        result["combined_lines"], package_type=package_type)
+
+    fields = compliance_result["fields"]
+    overall_status = compliance_result["overall_verdict"]
+    failed_fields = [f for f, r in fields.items() if r["status"] == "FAIL"]
+    violation_type = ", ".join(failed_fields) if failed_fields else None
 
     batch_id = uuid.uuid4().hex[:8]
 
@@ -128,8 +134,8 @@ def batch(
         product_id=product_id,
         product_name="unknown",
         category="unknown",
-        overall_status="pending_extraction",
-        violation_type=None,
+        overall_status=overall_status,
+        violation_type=violation_type,
         fields_json=json.dumps(fields),
         raw_ocr_json=json.dumps(result["combined_lines"])
     )
@@ -140,6 +146,9 @@ def batch(
     return {
         "batch_id": batch_id,
         "product_id": product_id,
+        "package_type": package_type,
         "images_processed": result["images_processed"],
+        "overall_status": overall_status,
+        "violation_type": violation_type,
         "fields": fields
     }

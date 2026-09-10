@@ -172,9 +172,13 @@ function App() {
 
         {/* ================= PAGE CONTENT ================= */}
 
-        {activePage === "Scan Product" && (
+        <div
+          style={{
+            display: activePage === "Scan Product" ? "block" : "none",
+          }}
+        >
           <ScanProductPage />
-        )}
+        </div>
 
         {activePage === "Dashboard" && (
           <BlankPage title="Dashboard" />
@@ -217,6 +221,8 @@ function ScanProductPage() {
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStream, setCameraStream] = useState(null);
+
+  const [scanController, setScanController] = useState(null);
 
   const startCamera = async () => {
     try {
@@ -333,8 +339,13 @@ function ScanProductPage() {
       return;
     }
 
+    // Create a controller for this scan
+    const controller = new AbortController();
+
+    setScanController(controller);
     setLoading(true);
     setScanResult(null);
+    setScanned(false);
 
     try {
       const formData = new FormData();
@@ -346,6 +357,9 @@ function ScanProductPage() {
         {
           method: "POST",
           body: formData,
+
+          // Allows Change Image to cancel this request
+          signal: controller.signal,
         }
       );
 
@@ -357,16 +371,27 @@ function ScanProductPage() {
 
       console.log("Backend result:", result);
 
-      // IMPORTANT
       setScanResult(result);
-
       setScanned(true);
+
     } catch (error) {
+
+      // This happens when user clicks Change Image
+      if (error.name === "AbortError") {
+        console.log("Scan cancelled by user.");
+        return;
+      }
+
       console.error("Scan failed:", error);
 
-      alert("Unable to scan the image.");
+      alert(
+        "Unable to scan the image. Please check that the backend is running."
+      );
+
     } finally {
+
       setLoading(false);
+      setScanController(null);
     }
   };
 
@@ -542,10 +567,19 @@ function ScanProductPage() {
                 <button
                   className="secondary-button"
                   onClick={() => {
+
+                    // Cancel ongoing backend request
+                    if (scanController) {
+                      scanController.abort();
+                    }
+
+                    // Reset UI
                     setImage(null);
                     setImageFile(null);
                     setScanned(false);
                     setScanResult(null);
+                    setLoading(false);
+
                   }}
                 >
                   Change Image

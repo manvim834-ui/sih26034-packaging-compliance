@@ -1,4 +1,6 @@
 import { useRef, useState } from "react";
+import HistoryPage from "./pages/HistoryPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
 import "./App.css";
 
 const formatFieldName = (name) => {
@@ -180,16 +182,24 @@ function App() {
           <ScanProductPage />
         </div>
 
+        {activePage === "Scan History" && (
+          <HistoryPage />
+        )}
+
+        {activePage === "Analytics" && (
+          <AnalyticsPage />
+        )}
+
         {activePage === "Dashboard" && (
           <BlankPage title="Dashboard" />
         )}
 
         {activePage === "Scan History" && (
-          <BlankPage title="Scan History" />
+          <BlankPage title="" />
         )}
 
         {activePage === "Analytics" && (
-          <BlankPage title="Analytics" />
+          <BlankPage title="" />
         )}
 
         {activePage === "Settings" && (

@@ -79,7 +79,7 @@ def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
         scan_id=scan_id,
         product_id="unknown",
         product_name="unknown",
-        category="unknown",
+        category=package_type,
         overall_status=overall_status,
         violation_type=violation_type,
         fields_json=json.dumps(fields),
@@ -100,15 +100,28 @@ def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
 @app.get("/history")
 def history(db: Session = Depends(get_db)):
-    scans = db.query(models.Scan).all()
+    scans = db.query(models.Scan).order_by(
+        models.Scan.created_at.desc()
+    ).all()
+
     result = []
+
     for s in scans:
         result.append({
             "scan_id": s.scan_id,
             "product_id": s.product_id,
+            "product_name": s.product_name,
+            "category": s.category,
             "overall_status": s.overall_status,
+            "violation_type": s.violation_type,
+            "timestamp": (
+                s.created_at.isoformat()
+                if s.created_at
+                else None
+            ),
             "fields": json.loads(s.fields_json)
         })
+
     return result
 
 
@@ -127,7 +140,13 @@ def get_scan(scan_id: str, db: Session = Depends(get_db)):
         "category": scan.category,
         "overall_status": scan.overall_status,
         "violation_type": scan.violation_type,
-        "fields": json.loads(scan.fields_json)
+        "timestamp": (
+            scan.created_at.isoformat()
+            if scan.created_at
+            else None
+        ),
+        "fields": json.loads(scan.fields_json),
+        "raw_ocr": json.loads(scan.raw_ocr_json)
     }
 
 
@@ -169,7 +188,7 @@ def batch(
         scan_id=batch_id,
         product_id=product_id,
         product_name="unknown",
-        category="unknown",
+        category=package_type,
         overall_status=overall_status,
         violation_type=violation_type,
         fields_json=json.dumps(fields),

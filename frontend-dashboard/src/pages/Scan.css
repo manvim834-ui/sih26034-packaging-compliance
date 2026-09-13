@@ -1,0 +1,8 @@
+.scan-card { min-height: 350px; display: grid; place-items: center; align-content: center; gap: 12px; text-align: center; border: 1px dashed #c9ada5; border-radius: 16px; background: rgba(255,255,255,.42); }
+.scan-card__icon { display: grid; place-items: center; width: 58px; height: 58px; margin-bottom: 4px; color: var(--seal); background: var(--seal-tint); border-radius: 50%; }
+.scan-card__icon svg { width: 28px; height: 28px; }
+.scan-card h2 { font-size: 24px; }
+.scan-card p { margin-bottom: 8px; color: var(--ink-secondary); }
+.scan-note { display: flex; gap: 12px; margin-top: 18px; padding: 14px 16px; background: #f7ece6; border-radius: 12px; color: var(--ink-secondary); }
+.scan-note strong { color: var(--ink); white-space: nowrap; }
+@media (max-width: 520px) { .scan-note { flex-direction: column; gap: 4px; } }

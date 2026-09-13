@@ -1,0 +1,41 @@
+:root {
+  --canvas: #f4ece8;
+  --canvas-warm: #fbf4ef;
+  --surface: rgba(255, 251, 248, 0.82);
+  --surface-strong: #fffaf7;
+  --surface-muted: #f5eeec;
+  --sidebar: #523b50;
+  --sidebar-deep: #463244;
+  --sidebar-active: rgba(255, 255, 255, 0.16);
+  --ink: #38283b;
+  --ink-secondary: #756773;
+  --ink-faint: #9a8d97;
+  --border: #e5d9d6;
+  --border-strong: #d8c9c6;
+
+  --seal: #d66f37;
+  --seal-strong: #bd552a;
+  --seal-tint: #fae8db;
+  --compliant: #247a45;
+  --compliant-bg: #e4f1e5;
+  --noncompliant: #bd3039;
+  --noncompliant-bg: #fae4e5;
+  --review: #a96208;
+  --review-bg: #fff0d0;
+
+  --glass: var(--surface);
+  --glass-strong: var(--surface-strong);
+  --glass-sunken: var(--surface-muted);
+  --glass-border: var(--border);
+  --glass-blur: 18px;
+  --paper: var(--surface-strong);
+
+  --font-display: Georgia, "Times New Roman", serif;
+  --font-body: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+
+  --sidebar-width: 228px;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shell-height: calc(100vh - 48px);
+}

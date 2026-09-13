@@ -1,0 +1,5 @@
+.admin-actions { display: flex; gap: 10px; }
+.admin-split { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; align-items: start; }
+.admin-json { margin: 0; padding: 18px; max-height: 480px; overflow: auto; background: var(--sidebar-deep); border: 1px solid #70536b; color: #f5e9ee; border-radius: 14px; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; }
+@media (max-width: 1000px) { .admin-split { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { .admin-actions { flex-direction: column; } }

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import HistoryPage from "./pages/HistoryPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import DashboardPage from "./pages/DashboardPage";
 import "./App.css";
 
 const formatFieldName = (name) => {
@@ -191,16 +192,10 @@ function App() {
         )}
 
         {activePage === "Dashboard" && (
-          <BlankPage title="Dashboard" />
+          <DashboardPage />
         )}
 
-        {activePage === "Scan History" && (
-          <BlankPage title="" />
-        )}
 
-        {activePage === "Analytics" && (
-          <BlankPage title="" />
-        )}
 
         {activePage === "Settings" && (
           <BlankPage title="Settings" />
@@ -350,6 +345,11 @@ function ScanProductPage() {
     setScanResult(null);
   };
 
+
+  // =========================================================
+  // MULTIPLE IMAGE SCANNER
+  // =========================================================
+
   const handleMultipleUpload = (e) => {
     const files = Array.from(e.target.files || []);
 
@@ -375,6 +375,52 @@ function ScanProductPage() {
     );
 
     setBatchResult(null);
+  };
+
+  const scanMultipleProducts = async () => {
+    if (multipleFiles.length === 0) {
+      alert("Please select at least one image.");
+      return;
+    }
+
+    setBatchLoading(true);
+    setBatchResult(null);
+
+    try {
+      const formData = new FormData();
+      const productId = `batch-${Date.now()}`;
+
+      formData.append("product_id", productId);
+
+      multipleFiles.forEach((file) => {
+        formData.append("files", file);
+      });
+
+      const response = await fetch(
+        "http://localhost:8000/batch",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Backend returned ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      console.log("Batch backend result:", result);
+      setBatchResult(result);
+    } catch (error) {
+      console.error("Batch scan failed:", error);
+
+      alert(
+        "Unable to scan the images. Please check that the backend is running."
+      );
+    } finally {
+      setBatchLoading(false);
+    }
   };
 
 
@@ -440,54 +486,6 @@ function ScanProductPage() {
     }
   };
 
-  const scanMultipleProducts = async () => {
-    if (multipleFiles.length === 0) {
-      alert("Please select at least one image.");
-      return;
-    }
-
-    setBatchLoading(true);
-    setBatchResult(null);
-
-    try {
-      const formData = new FormData();
-
-      const productId = `batch-${Date.now()}`;
-
-      formData.append("product_id", productId);
-
-      multipleFiles.forEach((file) => {
-        formData.append("files", file);
-      });
-
-      const response = await fetch(
-        "http://localhost:8000/batch",
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Backend returned ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      console.log("Batch backend result:", result);
-
-      setBatchResult(result);
-    } catch (error) {
-      console.error("Batch scan failed:", error);
-
-      alert(
-        "Unable to scan the images. Please check that the backend is running."
-      );
-    } finally {
-      setBatchLoading(false);
-    }
-  };
-
 
   return (
 
@@ -510,9 +508,7 @@ function ScanProductPage() {
           mandatory packaging declarations.
         </p>
 
-        {/* SCAN MODE TOGGLE */}
         <div className="scan-mode-toggle">
-
           <button
             className={scanMode === "single" ? "active" : ""}
             onClick={() => {
@@ -527,7 +523,6 @@ function ScanProductPage() {
             className={scanMode === "multiple" ? "active" : ""}
             onClick={() => {
               setScanMode("multiple");
-
               setImage(null);
               setImageFile(null);
               setScanned(false);
@@ -536,7 +531,6 @@ function ScanProductPage() {
           >
             Multiple Images
           </button>
-
         </div>
 
       </section>
@@ -546,6 +540,7 @@ function ScanProductPage() {
       {scanMode === "single" && (
         <div className="scanner-grid">
           {/* ================= LEFT ================= */}
+
           <section className="panel">
 
             <div className="panel-header">
@@ -925,181 +920,25 @@ function ScanProductPage() {
               </div>
             )}
 
-            {batchResult && (
-              <div className="batch-result-container">
-
-                <div className="batch-result-header">
-
-                  <div>
-
-                    <h2>Multi-Image Compliance Result</h2>
-
-                    <p>
-                      Batch ID:{" "}
-                      <strong>{batchResult.batch_id}</strong>
-                    </p>
-
-                    <p>
-                      Images Processed:{" "}
-                      <strong>{batchResult.images_processed}</strong>
-                    </p>
-
-                    <p>
-                      Package Type:{" "}
-                      <strong>
-                        {batchResult.package_type
-                          ? formatFieldName(batchResult.package_type)
-                          : "N/A"}
-                      </strong>
-                    </p>
-
-                  </div>
-
-
-                  <div
-                    className={`overall-status ${batchResult.overall_status === "COMPLIANT"
-                      ? "compliant"
-                      : "non-compliant"
-                      }`}
-                  >
-                    {batchResult.overall_status?.replaceAll("_", " ")}
-                  </div>
-
-                </div>
-
-
-                {batchResult.violation_type && (
-                  <div className="violations-section">
-
-                    <h3>Detected Violations</h3>
-
-                    <div className="violation-list">
-
-                      {batchResult.violation_type
-                        .split(",")
-                        .map((violation, index) => (
-
-                          <span
-                            className="violation-badge"
-                            key={index}
-                          >
-                            {formatFieldName(
-                              violation.trim()
-                            )}
-                          </span>
-
-                        ))}
-
-                    </div>
-
-                  </div>
-                )}
-
-
-                <div className="fields-section">
-
-                  <h3>Declaration Checks</h3>
-
-                  <div className="fields-grid">
-
-                    {Object.entries(
-                      batchResult.fields || {}
-                    ).map(([fieldName, fieldData]) => (
-
-                      <div
-                        className="field-card"
-                        key={fieldName}
-                      >
-
-                        <div className="field-card-header">
-
-                          <h4>
-                            {formatFieldName(fieldName)}
-                          </h4>
-
-                          <span
-                            className={`field-status ${fieldData.status === "PASS"
-                              ? "pass"
-                              : fieldData.status === "FAIL"
-                                ? "fail"
-                                : "not-applicable"
-                              }`}
-                          >
-                            {fieldData.status?.replaceAll(
-                              "_",
-                              " "
-                            )}
-                          </span>
-
-                        </div>
-
-
-                        <div className="field-content">
-
-                          <p>
-                            <strong>Detected Value</strong>
-                          </p>
-
-                          <p className="detected-value">
-                            {displayFieldValue(
-                              fieldData.value
-                            )}
-                          </p>
-
-                          {fieldData.reason && (
-                            <>
-                              <p>
-                                <strong>Reason</strong>
-                              </p>
-
-                              <p>
-                                {fieldData.reason}
-                              </p>
-                            </>
-                          )}
-
-                        </div>
-
-                      </div>
-
-                    ))}
-
-                  </div>
-
-                </div>
-
-              </div>
-            )}
-
           </section>
 
         </div>
+
       )}
 
       {scanMode === "multiple" && (
         <div className="multiple-scan-section">
 
           <section className="panel">
-
             <div className="panel-header">
-
               <div>
                 <h3>Multiple Image Scanner</h3>
-
-                <p>
-                  Upload different views of the same product
-                </p>
+                <p>Upload different views of the same product</p>
               </div>
-
             </div>
 
-
-            {/* UPLOAD MULTIPLE IMAGES */}
-
             {multipleFiles.length === 0 ? (
-
               <label className="upload-box multiple-upload-box">
-
                 <input
                   type="file"
                   accept="image/*"
@@ -1108,13 +947,9 @@ function ScanProductPage() {
                   onChange={handleMultipleUpload}
                 />
 
-                <div className="upload-icon">
-                  ↑
-                </div>
+                <div className="upload-icon">↑</div>
 
-                <h3>
-                  Upload Multiple Product Images
-                </h3>
+                <h3>Upload Multiple Product Images</h3>
 
                 <p>
                   Upload different views of the same product
@@ -1127,31 +962,18 @@ function ScanProductPage() {
                 <span className="upload-button">
                   Choose Images
                 </span>
-
               </label>
-
             ) : (
-
               <>
-
-                {/* SELECTED IMAGES HEADER */}
-
                 <div className="multiple-upload-header">
-
                   <div>
-
-                    <h3>
-                      Selected Product Images
-                    </h3>
+                    <h3>Selected Product Images</h3>
 
                     <p>
                       {multipleFiles.length} image
-                      {multipleFiles.length !== 1 ? "s" : ""}
-                      {" "}selected
+                      {multipleFiles.length !== 1 ? "s" : ""} selected
                     </p>
-
                   </div>
-
 
                   <button
                     className="secondary-button"
@@ -1163,28 +985,20 @@ function ScanProductPage() {
                   >
                     Change Images
                   </button>
-
                 </div>
 
-
-                {/* IMAGE PREVIEWS */}
-
                 <div className="multiple-preview-grid">
-
                   {multiplePreviews.map((preview, index) => (
-
                     <div
                       className="multiple-preview-card"
                       key={preview}
                     >
-
                       <img
                         src={preview}
                         alt={`Product view ${index + 1}`}
                       />
 
                       <div className="multiple-preview-info">
-
                         <span>
                           Image {index + 1}
                         </span>
@@ -1196,17 +1010,10 @@ function ScanProductPage() {
                         >
                           ×
                         </button>
-
                       </div>
-
                     </div>
-
                   ))}
-
                 </div>
-
-
-                {/* SCAN BUTTON */}
 
                 <button
                   className="scan-button"
@@ -1217,32 +1024,20 @@ function ScanProductPage() {
                     ? "Scanning Product..."
                     : `Scan ${multipleFiles.length} Images`}
                 </button>
-
               </>
-
             )}
-
           </section>
-
-
-          {/* MULTI IMAGE RESULT */}
 
           {batchResult && (
             <section className="panel results-panel batch-result-container">
 
               <div className="batch-result-header">
-
                 <div>
-
-                  <h2>
-                    Multi-Image Compliance Result
-                  </h2>
+                  <h2>Multi-Image Compliance Result</h2>
 
                   <p>
                     Batch ID:{" "}
-                    <strong>
-                      {batchResult.batch_id}
-                    </strong>
+                    <strong>{batchResult.batch_id}</strong>
                   </p>
 
                   <p>
@@ -1262,9 +1057,7 @@ function ScanProductPage() {
                         : "N/A"}
                     </strong>
                   </p>
-
                 </div>
-
 
                 <div
                   className={`overall-status ${batchResult.overall_status === "COMPLIANT"
@@ -1277,25 +1070,17 @@ function ScanProductPage() {
                     " "
                   )}
                 </div>
-
               </div>
-
-
-              {/* VIOLATIONS */}
 
               {batchResult.violation_type && (
                 <div className="violations-section">
 
-                  <h3>
-                    Detected Violations
-                  </h3>
+                  <h3>Detected Violations</h3>
 
                   <div className="violation-list">
-
                     {batchResult.violation_type
                       .split(",")
                       .map((violation, index) => (
-
                         <span
                           className="violation-badge"
                           key={index}
@@ -1304,95 +1089,78 @@ function ScanProductPage() {
                             violation.trim()
                           )}
                         </span>
-
                       ))}
-
                   </div>
 
                 </div>
               )}
 
-
-              {/* DECLARATION CHECKS */}
-
               <div className="fields-section">
 
-                <h3>
-                  Declaration Checks
-                </h3>
+                <h3>Declaration Checks</h3>
 
                 <div className="fields-grid">
 
                   {Object.entries(
                     batchResult.fields || {}
-                  ).map(
-                    ([fieldName, fieldData]) => (
+                  ).map(([fieldName, fieldData]) => (
 
-                      <div
-                        className="field-card"
-                        key={fieldName}
-                      >
+                    <div
+                      className="field-card"
+                      key={fieldName}
+                    >
 
-                        <div className="field-card-header">
+                      <div className="field-card-header">
 
-                          <h4>
-                            {formatFieldName(
-                              fieldName
-                            )}
-                          </h4>
+                        <h4>
+                          {formatFieldName(fieldName)}
+                        </h4>
 
-                          <span
-                            className={`field-status ${fieldData.status === "PASS"
-                                ? "pass"
-                                : fieldData.status === "FAIL"
-                                  ? "fail"
-                                  : "not-applicable"
-                              }`}
-                          >
-                            {fieldData.status?.replaceAll(
-                              "_",
-                              " "
-                            )}
-                          </span>
-
-                        </div>
-
-
-                        <div className="field-content">
-
-                          <p>
-                            <strong>
-                              Detected Value
-                            </strong>
-                          </p>
-
-                          <p className="detected-value">
-                            {displayFieldValue(
-                              fieldData.value
-                            )}
-                          </p>
-
-
-                          {fieldData.reason && (
-                            <>
-                              <p>
-                                <strong>
-                                  Reason
-                                </strong>
-                              </p>
-
-                              <p>
-                                {fieldData.reason}
-                              </p>
-                            </>
+                        <span
+                          className={`field-status ${fieldData.status === "PASS"
+                              ? "pass"
+                              : fieldData.status === "FAIL"
+                                ? "fail"
+                                : "not-applicable"
+                            }`}
+                        >
+                          {fieldData.status?.replaceAll(
+                            "_",
+                            " "
                           )}
-
-                        </div>
+                        </span>
 
                       </div>
 
-                    )
-                  )}
+                      <div className="field-content">
+
+                        <p>
+                          <strong>Detected Value</strong>
+                        </p>
+
+                        <p className="detected-value">
+                          {displayFieldValue(
+                            fieldData.value
+                          )}
+                        </p>
+
+                        {fieldData.reason && (
+                          <>
+                            <p>
+                              <strong>Reason</strong>
+                            </p>
+
+                            <p>
+                              {fieldData.reason}
+                            </p>
+                          </>
+                        )}
+
+                      </div>
+
+                    </div>
+
+                  ))}
 
                 </div>
 
@@ -1403,6 +1171,7 @@ function ScanProductPage() {
 
         </div>
       )}
+
     </div>
 
   );

@@ -120,6 +120,10 @@ def get_scan(scan_id: str, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=404, detail=f"No scan found with scan_id '{scan_id}'")
 
+    raw_ocr = json.loads(scan.raw_ocr_json) if scan.raw_ocr_json else None
+    raw_lines = raw_ocr.get("lines", raw_ocr) if isinstance(
+        raw_ocr, dict) else raw_ocr
+
     return {
         "scan_id": scan.scan_id,
         "product_id": scan.product_id,
@@ -127,7 +131,8 @@ def get_scan(scan_id: str, db: Session = Depends(get_db)):
         "category": scan.category,
         "overall_status": scan.overall_status,
         "violation_type": scan.violation_type,
-        "fields": json.loads(scan.fields_json)
+        "fields": json.loads(scan.fields_json),
+        "raw_ocr_lines": [line.get("text") for line in raw_lines] if raw_lines else []
     }
 
 

@@ -8,7 +8,7 @@ product and preserves the source image for every OCR line.
 The public aggregate_product_images(...) API is kept compatible.
 """
 
-from ocr_pipeline import run_ocr_pipeline
+from .ocr_pipeline import run_ocr_pipeline
 
 
 def aggregate_product_images(

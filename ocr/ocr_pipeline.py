@@ -1,15 +1,27 @@
+"""
+Theme A - OCR Pipeline (Improved V1)
+
+Important:
+- This remains an OCR layer, not legal-rule validation.
+- Field extraction remains downstream.
+- The public run_ocr_pipeline(...) function keeps the existing contract
+  while adding better evidence handling.
+"""
+
 import logging
 import re
+from collections import Counter
+
 import easyocr
 
-from .preprocessing import generate_variants, image_quality
+from preprocessing import generate_variants, image_quality
 
 logger = logging.getLogger(__name__)
 
 if not logger.handlers:
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
 
 _readers = {}
@@ -19,10 +31,13 @@ def get_reader(languages=("en",), gpu=False):
     if not languages:
         raise ValueError("languages must contain at least one language code")
 
-    key = tuple(sorted(set(languages)))
+    key = (tuple(sorted(set(languages))), bool(gpu))
+
     if key not in _readers:
-        logger.info("Loading EasyOCR model for languages=%s", key)
-        _readers[key] = easyocr.Reader(list(key), gpu=gpu, verbose=False)
+        logger.info("Loading EasyOCR model for languages=%s gpu=%s", key[0], gpu)
+        _readers[key] = easyocr.Reader(
+            list(key[0]), gpu=gpu, verbose=False
+        )
 
     return _readers[key]
 
@@ -32,92 +47,89 @@ def run_ocr_on_variant(img, languages=("en",), source_variant=None, gpu=False):
     results = reader.readtext(img)
 
     lines = []
+
     for bbox, text, confidence in results:
         text = text.strip()
         if not text:
             continue
 
-        lines.append({
-            "text": text,
-            "confidence": round(float(confidence), 3),
-            "bbox": [[float(x), float(y)] for x, y in bbox],
-            "source_variant": source_variant
-        })
+        lines.append(
+            {
+                "text": text,
+                "confidence": round(float(confidence), 3),
+                "bbox": [[float(x), float(y)] for x, y in bbox],
+                "source_variant": source_variant,
+            }
+        )
+
     return lines
 
 
-def score_variant_result(lines):
-    """
-    IMPROVED SCORING (was: pure average confidence).
-    Now rewards:
-    - higher confidence (as before)
-    - more ACCEPTED lines specifically (not just any lines - a variant full
-      of flagged/suspicious text shouldn't score as well as one with clean
-      accepted reads)
-    - a bonus for finding lines that look like actual LMPC-relevant
-      candidates (MRP/date/quantity) - a variant that reads 3 useful
-      label fields is more valuable than one that reads 10 nutrition-table
-      numbers, even at similar average confidence.
-    """
-    if not lines:
-        return 0.0
-    accepted = [l for l in lines if l.get("status") == "accepted"]
-    avg_confidence = sum(l["confidence"] for l in lines) / len(lines)
-    candidate_bonus = sum(1 for l in lines if l.get("candidate_field")) * 0.1
-    return avg_confidence * (1 + 0.05 * len(accepted)) + candidate_bonus
-
-
-def variant_agreement_bonus(variant_results):
-    """
-    NEW: cross-variant agreement scoring. If two different variants
-    independently read the same text, that's stronger evidence than one
-    variant reading something no other variant confirms - same logic as
-    inter-rater agreement. Returns a dict of {variant_name: bonus_score}
-    to add to that variant's base score.
-    """
-    from collections import Counter
-    text_counts = Counter()
-    for lines in variant_results.values():
-        seen_in_this_variant = set(normalize_text(
-            l["text"]) for l in lines if l["text"])
-        for t in seen_in_this_variant:
-            text_counts[t] += 1
-
-    bonus = {}
-    for name, lines in variant_results.items():
-        agreement_score = 0.0
-        for line in lines:
-            key = normalize_text(line["text"])
-            if key and text_counts[key] > 1:
-                agreement_score += 0.05  # small bonus per line confirmed by another variant
-        bonus[name] = agreement_score
-    return bonus
-
-
 def normalize_text(text):
+    # Used only for agreement/deduplication, not for changing OCR text.
     return re.sub(r"\s+", "", text.lower())
 
 
-# Deliberately loose patterns - this is NOT field extraction (that's Theme
-# B's job). This only tags a line as "this LOOKS like it might be an MRP/
-# date/quantity candidate" so Theme B knows where to look first, and so
-# Theme A's own scoring can reward variants that find these. Theme B still
-# does the real parsing/validation against the actual LMPC rules.
+def _alnum_count(text):
+    return sum(ch.isalnum() or "\u0900" <= ch <= "\u097F" for ch in text)
+
+
+def _symbol_ratio(text):
+    if not text:
+        return 1.0
+    return sum(
+        not (ch.isalnum() or ch.isspace() or "\u0900" <= ch <= "\u097F")
+        for ch in text
+    ) / len(text)
+
+
 CANDIDATE_PATTERNS = {
-    "mrp": re.compile(r"\b(?:MRP|M\.?R\.?P\.?|RS|INR)\b|₹", re.I),
-    "date": re.compile(r"\b\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}\b|\b(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\s*\d{2,4}\b", re.I),
-    "net_quantity": re.compile(r"\b\d+(?:\.\d+)?\s*(?:g|kg|ml|l|gm|gms)\b", re.I),
-    "manufacturer": re.compile(r"\b(?:MFD|MFG|MANUFACTURED|PACKED|MARKETED)\s*(?:BY)?\b", re.I),
-    "consumer_care": re.compile(r"\b(?:CUSTOMER|CONSUMER)\s*CARE\b|\btoll[\s-]?free\b|@[\w.]+\.\w+", re.I),
+    "mrp": re.compile(
+        r"\b(?:MRP|M\.?R\.?P\.?|RS|INR)\b|₹",
+        re.I,
+    ),
+    "date": re.compile(
+        r"\b\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}\b"
+        r"|\b(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)"
+        r"[A-Z]*\s*\d{2,4}\b",
+        re.I,
+    ),
+    "net_quantity": re.compile(
+        r"\b\d+(?:\.\d+)?\s*(?:g|kg|ml|l|gm|gms)\b",
+        re.I,
+    ),
+    "manufacturer": re.compile(
+        r"\b(?:MFD|MFG|MANUFACTURED|PACKED|MARKETED)\s*(?:BY)?\b",
+        re.I,
+    ),
+    "consumer_care": re.compile(
+        r"\b(?:CUSTOMER|CONSUMER)\s*CARE\b"
+        r"|\btoll[\s-]?free\b"
+        r"|@[\w.]+\.\w+",
+        re.I,
+    ),
+    "ingredients": re.compile(
+        r"\b(?:INGREDIENTS?|COMPOSITION|CONTAINS|INGREDIENTS LIST)\b",
+        re.I,
+    ),
 }
 
 
+def tag_candidate_fields(text):
+    """
+    Return all relevant candidate fields rather than only the first match.
+    This is still lightweight tagging, not final field extraction.
+    """
+    return [
+        field
+        for field, pattern in CANDIDATE_PATTERNS.items()
+        if pattern.search(text)
+    ]
+
+
 def tag_candidate_field(text):
-    """Returns the first matching candidate field label, or None."""
-    for field, pattern in CANDIDATE_PATTERNS.items():
-        if pattern.search(text):
-            return field
-    return None
+    fields = tag_candidate_fields(text)
+    return fields[0] if fields else None
 
 
 def suspicious_text_flags(text):
@@ -135,19 +147,20 @@ def suspicious_text_flags(text):
         if not re.search(r"\d", cleaned):
             flags.append("quantity_keyword_without_digits")
 
-    if re.search(r"\bMRP\b", cleaned, re.I) and re.search(
-        r"[0-9OIlSGB]", cleaned
-    ):
+    if re.search(r"\bMRP\b", cleaned, re.I):
         if re.search(r"[OIlSGB]", cleaned):
             flags.append("possible_digit_letter_confusion")
 
-    if re.search(r"[^A-Za-z0-9\u0900-\u097F\s]{5,}", cleaned):
+    if _symbol_ratio(cleaned) > 0.35 and _alnum_count(cleaned) < 3:
         flags.append("excessive_symbols")
 
-    if len(cleaned) <= 2 and not re.search(
-        r"[A-Za-z0-9\u0900-\u097F]", cleaned
-    ):
+    if len(cleaned) <= 2 and _alnum_count(cleaned) == 0:
         flags.append("mostly_non_text")
+
+    # Very short isolated detections are often OCR noise. Do not delete them;
+    # flag them so downstream logic can make the final decision.
+    if len(cleaned) <= 2 and _alnum_count(cleaned) > 0:
+        flags.append("very_short_text")
 
     return sorted(set(flags))
 
@@ -157,23 +170,197 @@ def classify_line(confidence, text, confidence_threshold=0.60):
 
     if confidence < confidence_threshold:
         return "review", flags
+
     if flags:
         return "flagged", flags
+
     return "accepted", flags
 
 
+def _bbox_center_y(line):
+    bbox = line.get("bbox") or []
+    if not bbox:
+        return 0.0
+    return sum(float(p[1]) for p in bbox) / len(bbox)
+
+
+def _bbox_center_x(line):
+    bbox = line.get("bbox") or []
+    if not bbox:
+        return 0.0
+    return sum(float(p[0]) for p in bbox) / len(bbox)
+
+
+def _bbox_iou(a, b):
+    """
+    Axis-aligned IoU approximation used only for duplicate evidence.
+    It does not alter OCR coordinates.
+    """
+    if not a or not b:
+        return 0.0
+
+    ax1 = min(p[0] for p in a)
+    ay1 = min(p[1] for p in a)
+    ax2 = max(p[0] for p in a)
+    ay2 = max(p[1] for p in a)
+
+    bx1 = min(p[0] for p in b)
+    by1 = min(p[1] for p in b)
+    bx2 = max(p[0] for p in b)
+    by2 = max(p[1] for p in b)
+
+    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+
+    if ix2 <= ix1 or iy2 <= iy1:
+        return 0.0
+
+    inter = (ix2 - ix1) * (iy2 - iy1)
+    area_a = max(0.0, ax2 - ax1) * max(0.0, ay2 - ay1)
+    area_b = max(0.0, bx2 - bx1) * max(0.0, by2 - by1)
+    union = area_a + area_b - inter
+
+    return inter / union if union else 0.0
+
+
 def deduplicate_lines(all_lines):
-    seen = {}
+    """
+    Deduplicate repeated OCR detections while preserving evidence.
+
+    Two lines are treated as duplicates when normalized text is identical.
+    For identical text, keep the strongest detection and record how many
+    variants supported it.
+    """
+    groups = {}
 
     for line in all_lines:
         key = normalize_text(line["text"])
         if not key:
             continue
+        groups.setdefault(key, []).append(line)
 
-        if key not in seen or line["confidence"] > seen[key]["confidence"]:
-            seen[key] = line
+    merged = []
 
-    return list(seen.values())
+    for key, group in groups.items():
+        best = max(
+            group,
+            key=lambda x: (
+                float(x.get("confidence", 0.0)),
+                x.get("status") == "accepted",
+            ),
+        )
+        best = dict(best)
+
+        sources = sorted(
+            {
+                str(x.get("source_variant"))
+                for x in group
+                if x.get("source_variant")
+            }
+        )
+        best["variant_support_count"] = len(group)
+        best["supporting_variants"] = sources
+
+        # Agreement is evidence, not a replacement for OCR confidence.
+        if len(group) >= 2:
+            best["agreement"] = True
+        else:
+            best["agreement"] = False
+
+        merged.append(best)
+
+    return merged
+
+
+def score_variant_result(lines):
+    """
+    Score a variant using:
+    - average OCR confidence
+    - useful accepted detections
+    - candidate fields
+    - cross-variant support when available
+
+    The score is ONLY for choosing a primary variant. It is not a correctness
+    probability.
+    """
+    if not lines:
+        return 0.0
+
+    avg_conf = sum(l["confidence"] for l in lines) / len(lines)
+    accepted = sum(l.get("status") == "accepted" for l in lines)
+    candidates = sum(bool(l.get("candidate_fields")) for l in lines)
+    noisy = sum(
+        bool(l.get("flags"))
+        for l in lines
+    )
+
+    useful_score = (
+        avg_conf
+        + min(0.25, accepted * 0.025)
+        + min(0.30, candidates * 0.05)
+        - min(0.20, noisy * 0.015)
+    )
+
+    return max(0.0, useful_score)
+
+
+def variant_agreement_bonus(variant_results):
+    counts = Counter()
+
+    for lines in variant_results.values():
+        seen = {
+            normalize_text(l["text"])
+            for l in lines
+            if l.get("text")
+        }
+        counts.update(seen)
+
+    bonus = {}
+
+    for name, lines in variant_results.items():
+        score = 0.0
+        for line in lines:
+            key = normalize_text(line["text"])
+            if key and counts[key] > 1:
+                score += min(0.20, 0.05 * (counts[key] - 1))
+        bonus[name] = score
+
+    return bonus
+
+
+def _postprocess_lines(lines, confidence_threshold):
+    """
+    Add metadata only. OCR text is never silently corrected here.
+    """
+    processed = []
+
+    for line in lines:
+        item = dict(line)
+
+        status, flags = classify_line(
+            item["confidence"],
+            item["text"],
+            confidence_threshold,
+        )
+
+        item["status"] = status
+        item["flags"] = flags
+        item["candidate_fields"] = tag_candidate_fields(item["text"])
+        item["candidate_field"] = (
+            item["candidate_fields"][0]
+            if item["candidate_fields"]
+            else None
+        )
+
+        processed.append(item)
+
+    return processed
+
+
+def _average_confidence(lines):
+    if not lines:
+        return 0.0
+    return sum(l["confidence"] for l in lines) / len(lines)
 
 
 def run_ocr_pipeline(
@@ -187,50 +374,60 @@ def run_ocr_pipeline(
     max_image_dimension=1400,
     enabled_variants=None,
     curved_mode=False,
-    gpu=False
+    gpu=False,
 ):
     """
-    cascade_mode: NEW. If True, runs the two cheap variants first
-    (original + grayscale_contrast). If their combined result already looks
-    good (score above cascade_quality_threshold), STOPS there - skipping
-    the other 4 variants entirely. Only escalates to the full variant set
-    if the cheap pass looks weak. This gives speed on easy images and
-    thoroughness on hard ones, instead of always paying the cost of all
-    variants (or always limiting to just 2, which is what fast_mode does).
+    Main OCR entry point.
 
-    fast_mode and cascade_mode are mutually exclusive - fast_mode ALWAYS
-    uses only 2 variants (fixed, predictable speed). cascade_mode adapts
-    per-image. Use fast_mode for live demos where you need a hard speed
-    guarantee; use cascade_mode for batch dataset processing where you
-    want speed AND accuracy without manually choosing per image.
+    Compatibility:
+    - Existing callers can keep using the same function and parameters.
+    - Default language remains English.
+    - Product/image grouping remains outside this function.
+
+    New behavior:
+    - better variant scoring
+    - multi-variant agreement metadata
+    - all candidate fields per OCR line
+    - evidence-preserving deduplication
+    - no silent OCR text correction
     """
-    logger.info(
-        "OCR start image=%s languages=%s fast_mode=%s cascade_mode=%s threshold=%.2f",
-        image_path, languages, fast_mode, cascade_mode, confidence_threshold
-    )
-
     if not 0 <= confidence_threshold <= 1:
         raise ValueError("confidence_threshold must be between 0 and 1")
+
+    if not 0 <= cascade_quality_threshold <= 1:
+        raise ValueError("cascade_quality_threshold must be between 0 and 1")
+
     if fast_mode and cascade_mode:
         raise ValueError(
-            "fast_mode and cascade_mode are mutually exclusive - choose one")
+            "fast_mode and cascade_mode are mutually exclusive - choose one"
+        )
+
+    logger.info(
+        "OCR start image=%s languages=%s fast_mode=%s cascade_mode=%s",
+        image_path,
+        languages,
+        fast_mode,
+        cascade_mode,
+    )
 
     all_variants = generate_variants(
         image_path,
         max_dim=max_image_dimension,
         enabled_variants=enabled_variants,
         curved_mode=curved_mode,
-        logger_instance=logger
+        logger_instance=logger,
     )
 
     if fast_mode:
-        variants_to_run = {k: v for k, v in all_variants.items()
-                           if k in {"original", "grayscale_contrast"}}
+        names = {"original", "grayscale_contrast"}
+        variants_to_run = {
+            k: v for k, v in all_variants.items() if k in names
+        }
     elif cascade_mode:
-        # Stage 1: cheap variants only
-        cheap_names = {"original", "grayscale_contrast"}
-        variants_to_run = {k: v for k,
-                           v in all_variants.items() if k in cheap_names}
+        names = {"original", "grayscale_contrast"}
+        variants_to_run = {
+            k: v for k, v in all_variants.items() if k in names
+        }
     else:
         variants_to_run = all_variants
 
@@ -238,50 +435,56 @@ def run_ocr_pipeline(
         raise ValueError("No preprocessing variants available")
 
     def run_variants(variant_dict):
-        results, scores = {}, {}
+        results = {}
+        scores = {}
+
         for name, img in variant_dict.items():
-            logger.debug("Running OCR on variant=%s", name)
-            lines = run_ocr_on_variant(
-                img, languages, source_variant=name, gpu=gpu)
-            for line in lines:
-                status, flags = classify_line(
-                    line["confidence"], line["text"], confidence_threshold)
-                line["status"] = status
-                line["flags"] = flags
-                line["candidate_field"] = tag_candidate_field(line["text"])
+            raw_lines = run_ocr_on_variant(
+                img,
+                languages=languages,
+                source_variant=name,
+                gpu=gpu,
+            )
+            lines = _postprocess_lines(
+                raw_lines,
+                confidence_threshold,
+            )
             results[name] = lines
             scores[name] = score_variant_result(lines)
-            logger.info("Variant=%s lines=%d score=%.3f",
-                        name, len(lines), scores[name])
+
+            logger.info(
+                "Variant=%s lines=%d score=%.3f avg_conf=%.3f",
+                name,
+                len(lines),
+                scores[name],
+                _average_confidence(lines),
+            )
+
         return results, scores
 
     variant_results, variant_scores = run_variants(variants_to_run)
 
     escalated = False
-    if cascade_mode:
-        # FIXED: use a direct average-confidence measure for the escalation
-        # decision, not the composite "score" (which includes candidate-field
-        # bonuses and can look artificially healthy even when raw OCR
-        # confidence is actually poor - found this by testing on a genuinely
-        # hard image where it should have escalated but didn't).
-        cheap_lines = [l for lines in variant_results.values() for l in lines]
-        cheap_avg_confidence = (
-            sum(l["confidence"] for l in cheap_lines) / len(cheap_lines)
-            if cheap_lines else 0.0
-        )
-        if cheap_avg_confidence < cascade_quality_threshold:
-            logger.info(
-                "Cascade escalating: cheap-pass avg confidence %.3f < threshold %.3f",
-                cheap_avg_confidence, cascade_quality_threshold
-            )
-            escalated = True
-            remaining = {k: v for k, v in all_variants.items()
-                         if k not in variants_to_run}
-            more_results, more_scores = run_variants(remaining)
-            variant_results.update(more_results)
-            variant_scores.update(more_scores)
 
-    # cross-variant agreement bonus (only meaningful once we have 2+ variants)
+    if cascade_mode:
+        cheap_lines = [
+            l for lines in variant_results.values() for l in lines
+        ]
+        cheap_avg = _average_confidence(cheap_lines)
+
+        if cheap_avg < cascade_quality_threshold:
+            escalated = True
+            remaining = {
+                k: v
+                for k, v in all_variants.items()
+                if k not in variants_to_run
+            }
+
+            if remaining:
+                more_results, more_scores = run_variants(remaining)
+                variant_results.update(more_results)
+                variant_scores.update(more_scores)
+
     if len(variant_results) > 1:
         agreement_bonus = variant_agreement_bonus(variant_results)
         for name in variant_scores:
@@ -289,16 +492,28 @@ def run_ocr_pipeline(
 
     best_variant = max(variant_scores, key=variant_scores.get)
 
-    all_lines = [line for lines in variant_results.values() for line in lines]
+    all_lines = [
+        line for lines in variant_results.values() for line in lines
+    ]
+
     merged_lines = deduplicate_lines(all_lines)
-    merged_lines.sort(key=lambda x: x["bbox"][0][1] if x["bbox"] else 0)
+
+    # Natural reading order. This is approximate because package text can be
+    # multi-column; downstream field extraction should use bbox when needed.
+    merged_lines.sort(
+        key=lambda x: (_bbox_center_y(x), _bbox_center_x(x))
+    )
 
     overall_confidence = round(
-        sum(x["confidence"] for x in merged_lines) / len(merged_lines), 3
-    ) if merged_lines else 0.0
+        _average_confidence(merged_lines), 3
+    )
 
-    review_count = sum(x["status"] == "review" for x in merged_lines)
-    flagged_count = sum(x["status"] == "flagged" for x in merged_lines)
+    review_count = sum(
+        x["status"] == "review" for x in merged_lines
+    )
+    flagged_count = sum(
+        x["status"] == "flagged" for x in merged_lines
+    )
 
     if not merged_lines:
         pipeline_status = "no_text_detected"
@@ -307,17 +522,15 @@ def run_ocr_pipeline(
     else:
         pipeline_status = "success"
 
-    # FIXED BUG: no longer assumes "original" is always present. Falls back
-    # to whichever variant IS available if "original" wasn't in the enabled set.
-    if "original" in all_variants:
-        quality_img = all_variants["original"]
-    else:
-        quality_img = next(iter(all_variants.values()))
-    quality = image_quality(quality_img)
+    quality_img = (
+        all_variants["original"]
+        if "original" in all_variants
+        else next(iter(all_variants.values()))
+    )
 
     output = {
         "status": pipeline_status,
-        "image_path": image_path,
+        "image_path": str(image_path),
         "images_processed": 1,
         "language_mode": list(languages),
         "best_variant": best_variant,
@@ -326,24 +539,26 @@ def run_ocr_pipeline(
         "confidence_threshold": confidence_threshold,
         "review_count": review_count,
         "flagged_count": flagged_count,
-        "image_quality": quality,
+        "image_quality": image_quality(quality_img),
         "lines": merged_lines,
         "config": {
             "fast_mode": fast_mode,
             "cascade_mode": cascade_mode,
             "cascade_escalated": escalated,
             "max_image_dimension": max_image_dimension,
-            "enabled_variants": list(variant_results.keys())
-        }
+            "enabled_variants": list(variant_results.keys()),
+        },
     }
 
     if keep_all_variants:
         output["all_variants_raw"] = variant_results
 
     logger.info(
-        "OCR complete image=%s status=%s lines=%d confidence=%.3f escalated=%s",
-        image_path, pipeline_status, len(
-            merged_lines), overall_confidence, escalated
+        "OCR complete image=%s status=%s lines=%d confidence=%.3f",
+        image_path,
+        pipeline_status,
+        len(merged_lines),
+        overall_confidence,
     )
 
     return output

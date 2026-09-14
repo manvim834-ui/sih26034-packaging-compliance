@@ -1,0 +1,8 @@
+.verdict-badge { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 650; white-space: nowrap; }
+.verdict-badge::before { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; color: white; font-size: 11px; font-weight: 800; }
+.verdict-badge--compliant { background: var(--compliant-bg); color: var(--compliant); }
+.verdict-badge--compliant::before { content: "✓"; background: #26934d; }
+.verdict-badge--non_compliant { background: var(--noncompliant-bg); color: var(--noncompliant); }
+.verdict-badge--non_compliant::before { content: "×"; background: #d6383f; }
+.verdict-badge--needs_review { background: var(--review-bg); color: var(--review); }
+.verdict-badge--needs_review::before { content: "!"; background: #d88a12; }

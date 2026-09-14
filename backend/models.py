@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, Integer, String, DateTime
+from datetime import datetime
 from .database import Base
 
 
@@ -14,3 +15,7 @@ class Scan(Base):
     violation_type = Column(String)
     fields_json = Column(String)
     raw_ocr_json = Column(String)
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )

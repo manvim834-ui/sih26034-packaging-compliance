@@ -79,7 +79,7 @@ def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
         scan_id=scan_id,
         product_id="unknown",
         product_name="unknown",
-        category="unknown",
+        category=package_type,
         overall_status=overall_status,
         violation_type=violation_type,
         fields_json=json.dumps(fields),
@@ -100,15 +100,28 @@ def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
 
 @app.get("/history")
 def history(db: Session = Depends(get_db)):
-    scans = db.query(models.Scan).all()
+    scans = db.query(models.Scan).order_by(
+        models.Scan.created_at.desc()
+    ).all()
+
     result = []
+
     for s in scans:
         result.append({
             "scan_id": s.scan_id,
             "product_id": s.product_id,
+            "product_name": s.product_name,
+            "category": s.category,
             "overall_status": s.overall_status,
+            "violation_type": s.violation_type,
+            "timestamp": (
+                s.created_at.isoformat()
+                if s.created_at
+                else None
+            ),
             "fields": json.loads(s.fields_json)
         })
+
     return result
 
 
@@ -132,7 +145,13 @@ def get_scan(scan_id: str, db: Session = Depends(get_db)):
         "overall_status": scan.overall_status,
         "violation_type": scan.violation_type,
         "fields": json.loads(scan.fields_json),
-        "raw_ocr_lines": [line.get("text") for line in raw_lines] if raw_lines else []
+        "raw_ocr_lines": [line.get("text") for line in raw_lines] if raw_lines else [],
+        "timestamp": (
+            scan.created_at.isoformat()
+            if scan.created_at
+            else None
+        ),
+        "raw_ocr": raw_ocr
     }
 
 
@@ -141,6 +160,8 @@ def batch(
     product_id: str = Form(...),
     files: List[UploadFile] = File(...),
     db: Session = Depends(get_db)
+
+
 ):
     from ocr.multi_image import aggregate_product_images
     from rules.classifier import classify_package
@@ -165,8 +186,10 @@ def batch(
 
     fields = compliance_result["fields"]
     overall_status = compliance_result["overall_verdict"]
-    failed_fields = [f for f, r in fields.items() if r["status"] == "FAIL"]
-    violation_type = ", ".join(failed_fields) if failed_fields else None
+    failed_fields = [
+        f for f, r in fields.items() if r["status"] == "FAIL"]
+    violation_type = ", ".join(
+        failed_fields) if failed_fields else None
 
     batch_id = uuid.uuid4().hex[:8]
 
@@ -174,7 +197,7 @@ def batch(
         scan_id=batch_id,
         product_id=product_id,
         product_name="unknown",
-        category="unknown",
+        category=package_type,
         overall_status=overall_status,
         violation_type=violation_type,
         fields_json=json.dumps(fields),

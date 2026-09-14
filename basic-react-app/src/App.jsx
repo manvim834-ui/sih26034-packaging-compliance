@@ -1,5 +1,36 @@
 import { useRef, useState } from "react";
+import HistoryPage from "./pages/HistoryPage";
+import AnalyticsPage from "./pages/AnalyticsPage";
+import DashboardPage from "./pages/DashboardPage";
 import "./App.css";
+
+const formatFieldName = (name) => {
+  return name
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const displayFieldValue = (value) => {
+  if (value === null || value === undefined) {
+    return "Not detected";
+  }
+
+  if (typeof value === "object") {
+    return Object.entries(value)
+      .map(([key, val]) => {
+        const formattedKey = formatFieldName(key);
+
+        if (typeof val === "boolean") {
+          return `${formattedKey}: ${val ? "Yes" : "No"}`;
+        }
+
+        return `${formattedKey}: ${val ?? "N/A"}`;
+      })
+      .join(" | ");
+  }
+
+  return String(value);
+};
 
 function App() {
   const [activePage, setActivePage] = useState("Dashboard");
@@ -144,21 +175,27 @@ function App() {
 
         {/* ================= PAGE CONTENT ================= */}
 
-        {activePage === "Scan Product" && (
+        <div
+          style={{
+            display: activePage === "Scan Product" ? "block" : "none",
+          }}
+        >
           <ScanProductPage />
-        )}
-
-        {activePage === "Dashboard" && (
-          <BlankPage title="Dashboard" />
-        )}
+        </div>
 
         {activePage === "Scan History" && (
-          <BlankPage title="Scan History" />
+          <HistoryPage />
         )}
 
         {activePage === "Analytics" && (
-          <BlankPage title="Analytics" />
+          <AnalyticsPage />
         )}
+
+        {activePage === "Dashboard" && (
+          <DashboardPage />
+        )}
+
+
 
         {activePage === "Settings" && (
           <BlankPage title="Settings" />
@@ -189,6 +226,16 @@ function ScanProductPage() {
 
   const [cameraOpen, setCameraOpen] = useState(false);
   const [cameraStream, setCameraStream] = useState(null);
+
+  const [scanController, setScanController] = useState(null);
+
+  const [scanMode, setScanMode] = useState("single");
+
+  const [multipleFiles, setMultipleFiles] = useState([]);
+  const [multiplePreviews, setMultiplePreviews] = useState([]);
+
+  const [batchResult, setBatchResult] = useState(null);
+  const [batchLoading, setBatchLoading] = useState(false);
 
   const startCamera = async () => {
     try {
@@ -279,47 +326,7 @@ function ScanProductPage() {
     setCameraOpen(false);
   };
 
-  const result = {
-    verdict: "NON_COMPLIANT",
 
-    fields: [
-      {
-        name: "Maximum Retail Price",
-        value: "₹120",
-        status: "PASS",
-        confidence: 96,
-        rule: "MRP declaration detected correctly.",
-      },
-      {
-        name: "Net Quantity",
-        value: "500 g",
-        status: "PASS",
-        confidence: 94,
-        rule: "Net quantity and unit are present.",
-      },
-      {
-        name: "Manufacturer Details",
-        value: "ABC Foods Pvt. Ltd.",
-        status: "PASS",
-        confidence: 91,
-        rule: "Manufacturer information detected.",
-      },
-      {
-        name: "Manufacturing Date",
-        value: "Not detected",
-        status: "FAIL",
-        confidence: 0,
-        rule: "Mandatory manufacturing/packing declaration was not detected.",
-      },
-      {
-        name: "Consumer Care",
-        value: "1800-123-456",
-        status: "REVIEW",
-        confidence: 72,
-        rule: "Information detected, but OCR confidence is low.",
-      },
-    ],
-  };
 
 
   const handleImageUpload = (e) => {
@@ -339,25 +346,58 @@ function ScanProductPage() {
   };
 
 
-  const scanProduct = async () => {
-    if (!imageFile) {
-      alert("Please upload or capture an image first.");
+  // =========================================================
+  // MULTIPLE IMAGE SCANNER
+  // =========================================================
+
+  const handleMultipleUpload = (e) => {
+    const files = Array.from(e.target.files || []);
+
+    if (files.length === 0) return;
+
+    setMultipleFiles(files);
+
+    const previews = files.map((file) =>
+      URL.createObjectURL(file)
+    );
+
+    setMultiplePreviews(previews);
+    setBatchResult(null);
+  };
+
+  const removeMultipleImage = (indexToRemove) => {
+    setMultipleFiles((prev) =>
+      prev.filter((_, index) => index !== indexToRemove)
+    );
+
+    setMultiplePreviews((prev) =>
+      prev.filter((_, index) => index !== indexToRemove)
+    );
+
+    setBatchResult(null);
+  };
+
+  const scanMultipleProducts = async () => {
+    if (multipleFiles.length === 0) {
+      alert("Please select at least one image.");
       return;
     }
 
-    setLoading(true);
-    setScanResult(null);
+    setBatchLoading(true);
+    setBatchResult(null);
 
     try {
-      // Create multipart/form-data
       const formData = new FormData();
+      const productId = `batch-${Date.now()}`;
 
-      // IMPORTANT:
-      // Backend parameter is called "file"
-      formData.append("file", imageFile);
+      formData.append("product_id", productId);
+
+      multipleFiles.forEach((file) => {
+        formData.append("files", file);
+      });
 
       const response = await fetch(
-        "http://localhost:8000/scan",
+        "http://localhost:8000/batch",
         {
           method: "POST",
           body: formData,
@@ -365,22 +405,73 @@ function ScanProductPage() {
       );
 
       if (!response.ok) {
-        throw new Error(
-          `Backend returned ${response.status}`
-        );
+        throw new Error(`Backend returned ${response.status}`);
       }
 
-      // Convert backend JSON response into JavaScript object
+      const result = await response.json();
+
+      console.log("Batch backend result:", result);
+      setBatchResult(result);
+    } catch (error) {
+      console.error("Batch scan failed:", error);
+
+      alert(
+        "Unable to scan the images. Please check that the backend is running."
+      );
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+
+  const scanProduct = async () => {
+    if (!imageFile) {
+      alert("Please upload or capture an image first.");
+      return;
+    }
+
+    // Create a controller for this scan
+    const controller = new AbortController();
+
+    setScanController(controller);
+    setLoading(true);
+    setScanResult(null);
+    setScanned(false);
+
+    try {
+      const formData = new FormData();
+
+      formData.append("file", imageFile);
+
+      const response = await fetch(
+        "http://localhost:8000/scan",
+        {
+          method: "POST",
+          body: formData,
+
+          // Allows Change Image to cancel this request
+          signal: controller.signal,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Backend returned ${response.status}`);
+      }
+
       const result = await response.json();
 
       console.log("Backend result:", result);
 
-      // Store result in React state
       setScanResult(result);
-
       setScanned(true);
 
     } catch (error) {
+
+      // This happens when user clicks Change Image
+      if (error.name === "AbortError") {
+        console.log("Scan cancelled by user.");
+        return;
+      }
 
       console.error("Scan failed:", error);
 
@@ -391,7 +482,7 @@ function ScanProductPage() {
     } finally {
 
       setLoading(false);
-
+      setScanController(null);
     }
   };
 
@@ -417,398 +508,669 @@ function ScanProductPage() {
           mandatory packaging declarations.
         </p>
 
+        <div className="scan-mode-toggle">
+          <button
+            className={scanMode === "single" ? "active" : ""}
+            onClick={() => {
+              setScanMode("single");
+              setBatchResult(null);
+            }}
+          >
+            Single Image
+          </button>
+
+          <button
+            className={scanMode === "multiple" ? "active" : ""}
+            onClick={() => {
+              setScanMode("multiple");
+              setImage(null);
+              setImageFile(null);
+              setScanned(false);
+              setScanResult(null);
+            }}
+          >
+            Multiple Images
+          </button>
+        </div>
+
       </section>
 
 
       {/* SCANNER GRID */}
+      {scanMode === "single" && (
+        <div className="scanner-grid">
+          {/* ================= LEFT ================= */}
 
-      <div className="scanner-grid">
+          <section className="panel">
 
+            <div className="panel-header">
 
-        {/* ================= LEFT ================= */}
+              <div>
+                <h3>Product Scanner</h3>
 
-        <section className="panel">
-
-          <div className="panel-header">
-
-            <div>
-              <h3>Product Scanner</h3>
-
-              <p>
-                Upload or capture a product label
-              </p>
-            </div>
-
-          </div>
-
-
-          {/* IMAGE / UPLOAD */}
-
-          {!image && !cameraOpen && (
-
-            <div className="upload-options">
-              {/* UPLOAD IMAGE */}
-
-              <label className="upload-box">
-
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  hidden
-                />
-
-                <div className="upload-icon">
-                  ↑
-                </div>
-
-                <h3>Upload Product Label</h3>
-
-                <p>PNG, JPG or JPEG</p>
-
-                <span className="upload-button">
-                  Choose Image
-                </span>
-
-              </label>
-
-
-              {/* CAMERA BUTTON */}
-
-              <button
-                className="camera-button"
-                onClick={startCamera}
-              >
-                Open Camera
-              </button>
+                <p>
+                  Upload or capture a product label
+                </p>
+              </div>
 
             </div>
 
-          )}
 
-          {cameraOpen && (
+            {/* IMAGE / UPLOAD */}
 
-            <div className="camera-section">
+            {!image && !cameraOpen && (
 
-              <div className="camera-preview">
+              <div className="upload-options">
+                {/* UPLOAD IMAGE */}
 
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                />
+                <label className="upload-box">
 
-              </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    hidden
+                  />
 
-
-              <div className="camera-actions">
-
-                <button
-                  className="secondary-button"
-                  onClick={stopCamera}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  className="capture-button"
-                  onClick={captureImage}
-                >
-                  Capture Image
-                </button>
-
-              </div>
-
-
-              <canvas
-                ref={canvasRef}
-                style={{ display: "none" }}
-              />
-
-            </div>
-
-          )}
-
-
-          {/* BUTTONS */}
-
-          {image && !cameraOpen && (
-            <>
-              <div className="image-wrapper">
-
-                <img
-                  src={image}
-                  alt="Captured product"
-                  className="product-image"
-                />
-
-                {scanned && (
-                  <>
-                    <div className="bounding-box box-one">
-                      MRP
-                    </div>
-
-                    <div className="bounding-box box-two">
-                      NET QTY
-                    </div>
-                  </>
-                )}
-
-              </div>
-
-
-              {/* BUTTONS AFTER IMAGE */}
-
-              <div className="image-actions">
-
-                {/* CHANGE IMAGE */}
-
-                <button
-                  className="secondary-button"
-                  onClick={() => {
-                    setImage(null);
-                    setScanned(false);
-                  }}
-                >
-                  Change Image
-                </button>
-
-
-                {/* SCAN PRODUCT */}
-
-                <button
-                  className="scan-button"
-                  onClick={scanProduct}
-                  disabled={loading}
-                >
-
-                  {loading
-                    ? "Scanning..."
-                    : "Scan Product"
-                  }
-
-                </button>
-
-              </div>
-
-            </>
-          )}
-
-        </section>
-
-
-        {/* ================= RIGHT ================= */}
-
-        <section className="panel results-panel">
-
-
-          {/* EMPTY */}
-
-          {!scanned && !loading && (
-
-            <div className="empty-results">
-
-              <div className="empty-icon">
-                ✓
-              </div>
-
-              <h3>
-                No Scan Results
-              </h3>
-
-              <p>
-                Upload a product label and scan it
-                to view compliance results.
-              </p>
-
-            </div>
-
-          )}
-
-
-          {/* LOADING */}
-
-          {loading && (
-
-            <div className="scanning-container">
-
-              <div className="loader"></div>
-
-              <h3>
-                Analysing Product
-              </h3>
-
-              <p>
-                Checking mandatory packaging
-                declarations...
-              </p>
-
-            </div>
-
-          )}
-
-
-          {/* RESULTS */}
-
-          {scanned && (
-
-            <>
-
-              {/* RESULT HEADER */}
-
-              <div className="result-heading">
-
-                <div>
-
-                  <div className="result-label">
-                    COMPLIANCE RESULT
+                  <div className="upload-icon">
+                    ↑
                   </div>
 
-                  <h3>
-                    Scan Analysis
-                  </h3>
+                  <h3>Upload Product Label</h3>
 
-                </div>
+                  <p>PNG, JPG or JPEG</p>
 
+                  <span className="upload-button">
+                    Choose Image
+                  </span>
 
-                <div className="verdict non-compliant">
-                  × Non-Compliant
-                </div>
-
-              </div>
+                </label>
 
 
-              {/* SUMMARY */}
+                {/* CAMERA BUTTON */}
 
-              <div className="summary">
-
-                <div>
-                  <span>5</span>
-                  <p>Fields Checked</p>
-                </div>
-
-                <div>
-                  <span>3</span>
-                  <p>Passed</p>
-                </div>
-
-                <div>
-                  <span>1</span>
-                  <p>Violations</p>
-                </div>
+                <button
+                  className="camera-button"
+                  onClick={startCamera}
+                >
+                  Open Camera
+                </button>
 
               </div>
 
+            )}
 
-              {/* FIELD LIST */}
+            {cameraOpen && (
 
-              <div className="field-list">
+              <div className="camera-section">
 
-                {result.fields.map((field, index) => {
+                <div className="camera-preview">
 
-                  const statusClass =
-                    field.status === "PASS"
-                      ? "pass"
-                      : field.status === "FAIL"
-                        ? "fail"
-                        : "review";
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                  />
+
+                </div>
 
 
-                  return (
+                <div className="camera-actions">
 
-                    <div
-                      className={`field-card ${statusClass}`}
-                      key={index}
-                    >
+                  <button
+                    className="secondary-button"
+                    onClick={stopCamera}
+                  >
+                    Cancel
+                  </button>
 
-                      <div className="field-top">
+                  <button
+                    className="capture-button"
+                    onClick={captureImage}
+                  >
+                    Capture Image
+                  </button>
 
-                        <div>
+                </div>
 
-                          <span className="field-name">
-                            {field.name}
+
+                <canvas
+                  ref={canvasRef}
+                  style={{ display: "none" }}
+                />
+
+              </div>
+
+            )}
+
+
+            {/* BUTTONS */}
+
+            {image && !cameraOpen && (
+              <>
+                <div className="image-wrapper">
+
+                  <img
+                    src={image}
+                    alt="Captured product"
+                    className="product-image"
+                  />
+
+                  {/* {scanned && (
+                    <>
+                      <div className="bounding-box box-one">
+                        MRP
+                      </div>
+
+                      <div className="bounding-box box-two">
+                        NET QTY
+                      </div>
+                    </>
+                  )} */}
+
+                </div>
+
+
+                {/* BUTTONS AFTER IMAGE */}
+
+                <div className="image-actions">
+
+                  {/* CHANGE IMAGE */}
+
+                  <button
+                    className="secondary-button"
+                    onClick={() => {
+
+                      // Cancel ongoing backend request
+                      if (scanController) {
+                        scanController.abort();
+                      }
+
+                      // Reset UI
+                      setImage(null);
+                      setImageFile(null);
+                      setScanned(false);
+                      setScanResult(null);
+                      setLoading(false);
+
+                    }}
+                  >
+                    Change Image
+                  </button>
+
+
+                  {/* SCAN PRODUCT */}
+
+                  <button
+                    className="scan-button"
+                    onClick={scanProduct}
+                    disabled={loading}
+                  >
+
+                    {loading
+                      ? "Scanning..."
+                      : "Scan Product"
+                    }
+
+                  </button>
+
+                </div>
+
+              </>
+            )}
+
+          </section>
+
+
+          {/* ================= RIGHT ================= */}
+
+          <section className="panel results-panel">
+
+
+            {/* EMPTY */}
+
+            {!scanned && !loading && (
+
+              <div className="empty-results">
+
+                <div className="empty-icon">
+                  ✓
+                </div>
+
+                <h3>
+                  No Scan Results
+                </h3>
+
+                <p>
+                  Upload a product label and scan it
+                  to view compliance results.
+                </p>
+
+              </div>
+
+            )}
+
+
+            {/* LOADING */}
+
+            {loading && (
+
+              <div className="scanning-container">
+
+                <div className="loader"></div>
+
+                <h3>
+                  Analysing Product
+                </h3>
+
+                <p>
+                  Checking mandatory packaging
+                  declarations...
+                </p>
+
+              </div>
+
+            )}
+
+
+            {/* RESULTS */}
+
+            {scanResult && (
+              <div className="result-container">
+
+                {/* OVERALL RESULT */}
+                <div className="result-header">
+
+                  <div>
+                    <h2>Compliance Result</h2>
+
+                    <p>
+                      Scan ID: <strong>{scanResult.scan_id}</strong>
+                    </p>
+
+                    <p>
+                      Package Type:{" "}
+                      <strong>
+                        {scanResult.package_type
+                          ? formatFieldName(scanResult.package_type)
+                          : "N/A"}
+                      </strong>
+                    </p>
+                  </div>
+
+                  <div
+                    className={`overall-status ${scanResult.overall_status === "COMPLIANT"
+                      ? "compliant"
+                      : "non-compliant"
+                      }`}
+                  >
+                    {scanResult.overall_status?.replaceAll("_", " ")}
+                  </div>
+
+                </div>
+
+
+                {/* VIOLATIONS */}
+                {scanResult.violation_type && (
+                  <div className="violations-section">
+
+                    <h3>Detected Violations</h3>
+
+                    <div className="violation-list">
+
+                      {scanResult.violation_type
+                        .split(",")
+                        .map((violation, index) => (
+                          <span
+                            className="violation-badge"
+                            key={index}
+                          >
+                            {formatFieldName(violation.trim())}
                           </span>
+                        ))}
 
-                          <h4>
-                            {field.value}
-                          </h4>
+                    </div>
+
+                  </div>
+                )}
+
+
+                {/* DECLARATION CHECKS */}
+                <div className="fields-section">
+
+                  <h3>Declaration Checks</h3>
+
+                  <div className="fields-grid">
+
+                    {Object.entries(scanResult.fields || {}).map(
+                      ([fieldName, fieldData]) => (
+
+                        <div
+                          className="field-card"
+                          key={fieldName}
+                        >
+
+                          <div className="field-card-header">
+                            <h4>
+                              {formatFieldName(fieldName)}
+                            </h4>
+
+                            <span
+                              className={`field-status ${fieldData.status === "PASS"
+                                ? "pass"
+                                : fieldData.status === "FAIL"
+                                  ? "fail"
+                                  : "not-applicable"
+                                }`}
+                            >
+                              {fieldData.status?.replaceAll("_", " ")}
+                            </span>
+
+                          </div>
+
+
+                          <div className="field-content">
+
+                            <p>
+                              <strong>Detected Value</strong>
+                            </p>
+
+                            <p className="detected-value">
+                              {displayFieldValue(fieldData.value)}
+                            </p>
+
+
+                            {fieldData.reason && (
+                              <>
+                                <p>
+                                  <strong>Reason</strong>
+                                </p>
+
+                                <p>
+                                  {fieldData.reason}
+                                </p>
+                              </>
+                            )}
+
+
+                            {/* {fieldData.legal_reference && (
+                              <div className="legal-reference">
+
+                                <strong>
+                                  Legal Reference:
+                                </strong>{" "}
+
+                                {fieldData.legal_reference}
+
+                              </div>
+                            )} */}
+
+                          </div>
 
                         </div>
 
+                      )
+                    )}
+
+                  </div>
+
+                </div>
+
+              </div>
+            )}
+
+          </section>
+
+        </div>
+
+      )}
+
+      {scanMode === "multiple" && (
+        <div className="multiple-scan-section">
+
+          <section className="panel">
+            <div className="panel-header">
+              <div>
+                <h3>Multiple Image Scanner</h3>
+                <p>Upload different views of the same product</p>
+              </div>
+            </div>
+
+            {multipleFiles.length === 0 ? (
+              <label className="upload-box multiple-upload-box">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  hidden
+                  onChange={handleMultipleUpload}
+                />
+
+                <div className="upload-icon">↑</div>
+
+                <h3>Upload Multiple Product Images</h3>
+
+                <p>
+                  Upload different views of the same product
+                </p>
+
+                <p className="upload-hint">
+                  Front, back, side or bottom labels
+                </p>
+
+                <span className="upload-button">
+                  Choose Images
+                </span>
+              </label>
+            ) : (
+              <>
+                <div className="multiple-upload-header">
+                  <div>
+                    <h3>Selected Product Images</h3>
+
+                    <p>
+                      {multipleFiles.length} image
+                      {multipleFiles.length !== 1 ? "s" : ""} selected
+                    </p>
+                  </div>
+
+                  <button
+                    className="secondary-button"
+                    onClick={() => {
+                      setMultipleFiles([]);
+                      setMultiplePreviews([]);
+                      setBatchResult(null);
+                    }}
+                  >
+                    Change Images
+                  </button>
+                </div>
+
+                <div className="multiple-preview-grid">
+                  {multiplePreviews.map((preview, index) => (
+                    <div
+                      className="multiple-preview-card"
+                      key={preview}
+                    >
+                      <img
+                        src={preview}
+                        alt={`Product view ${index + 1}`}
+                      />
+
+                      <div className="multiple-preview-info">
+                        <span>
+                          Image {index + 1}
+                        </span>
+
+                        <button
+                          onClick={() =>
+                            removeMultipleImage(index)
+                          }
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  className="scan-button"
+                  disabled={batchLoading}
+                  onClick={scanMultipleProducts}
+                >
+                  {batchLoading
+                    ? "Scanning Product..."
+                    : `Scan ${multipleFiles.length} Images`}
+                </button>
+              </>
+            )}
+          </section>
+
+          {batchResult && (
+            <section className="panel results-panel batch-result-container">
+
+              <div className="batch-result-header">
+                <div>
+                  <h2>Multi-Image Compliance Result</h2>
+
+                  <p>
+                    Batch ID:{" "}
+                    <strong>{batchResult.batch_id}</strong>
+                  </p>
+
+                  <p>
+                    Images Processed:{" "}
+                    <strong>
+                      {batchResult.images_processed}
+                    </strong>
+                  </p>
+
+                  <p>
+                    Package Type:{" "}
+                    <strong>
+                      {batchResult.package_type
+                        ? formatFieldName(
+                          batchResult.package_type
+                        )
+                        : "N/A"}
+                    </strong>
+                  </p>
+                </div>
+
+                <div
+                  className={`overall-status ${batchResult.overall_status === "COMPLIANT"
+                      ? "compliant"
+                      : "non-compliant"
+                    }`}
+                >
+                  {batchResult.overall_status?.replaceAll(
+                    "_",
+                    " "
+                  )}
+                </div>
+              </div>
+
+              {batchResult.violation_type && (
+                <div className="violations-section">
+
+                  <h3>Detected Violations</h3>
+
+                  <div className="violation-list">
+                    {batchResult.violation_type
+                      .split(",")
+                      .map((violation, index) => (
+                        <span
+                          className="violation-badge"
+                          key={index}
+                        >
+                          {formatFieldName(
+                            violation.trim()
+                          )}
+                        </span>
+                      ))}
+                  </div>
+
+                </div>
+              )}
+
+              <div className="fields-section">
+
+                <h3>Declaration Checks</h3>
+
+                <div className="fields-grid">
+
+                  {Object.entries(
+                    batchResult.fields || {}
+                  ).map(([fieldName, fieldData]) => (
+
+                    <div
+                      className="field-card"
+                      key={fieldName}
+                    >
+
+                      <div className="field-card-header">
+
+                        <h4>
+                          {formatFieldName(fieldName)}
+                        </h4>
 
                         <span
-                          className={`status-badge ${statusClass}`}
+                          className={`field-status ${fieldData.status === "PASS"
+                              ? "pass"
+                              : fieldData.status === "FAIL"
+                                ? "fail"
+                                : "not-applicable"
+                            }`}
                         >
-                          {field.status === "PASS"
-                            ? "Passed"
-                            : field.status === "FAIL"
-                              ? "Failed"
-                              : "Needs Review"
-                          }
+                          {fieldData.status?.replaceAll(
+                            "_",
+                            " "
+                          )}
                         </span>
 
                       </div>
 
+                      <div className="field-content">
 
-                      {/* CONFIDENCE */}
+                        <p>
+                          <strong>Detected Value</strong>
+                        </p>
 
-                      <div className="confidence">
+                        <p className="detected-value">
+                          {displayFieldValue(
+                            fieldData.value
+                          )}
+                        </p>
 
-                        <div className="confidence-header">
+                        {fieldData.reason && (
+                          <>
+                            <p>
+                              <strong>Reason</strong>
+                            </p>
 
-                          <span>
-                            OCR Confidence
-                          </span>
-
-                          <span>
-                            {field.confidence}%
-                          </span>
-
-                        </div>
-
-
-                        <div className="confidence-bar">
-
-                          <div
-                            className={`confidence-fill ${statusClass}`}
-                            style={{
-                              width: `${field.confidence}%`,
-                            }}
-                          />
-
-                        </div>
-
-                      </div>
-
-
-                      {/* RULE */}
-
-                      <div className="rule-text">
-
-                        <strong>
-                          Rule Check:
-                        </strong>{" "}
-
-                        {field.rule}
+                            <p>
+                              {fieldData.reason}
+                            </p>
+                          </>
+                        )}
 
                       </div>
 
                     </div>
 
-                  );
+                  ))}
 
-                })}
+                </div>
 
               </div>
 
-            </>
-
+            </section>
           )}
 
-        </section>
-
-      </div>
+        </div>
+      )}
 
     </div>
 

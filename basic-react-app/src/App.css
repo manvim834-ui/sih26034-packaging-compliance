@@ -1,7 +1,13 @@
-/* =========================================================
-   SIH COMPLIANCE SCANNER — WARM PLUM THEME
-   Theme adapted from the uploaded themed frontend.
-   ========================================================= */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+* {
+  font-family: 'Poppins', sans-serif;
+}
+
+html,
+body,
+#root {
+  font-family: 'Poppins', sans-serif;
+}
 
 :root {
   --theme-bg: #f4ece8;
@@ -23,9 +29,8 @@
   --theme-danger-bg: #fae4e5;
   --theme-warning: #a96208;
   --theme-warning-bg: #fff0d0;
-  --theme-heading-font: Georgia, "Times New Roman", serif;
-  --theme-body-font: Inter, ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --theme-heading-font: 'Poppins', sans-serif;
+  --theme-body-font: 'Poppins', sans-serif;;
 }
 
 /* =========================================================
@@ -711,12 +716,7 @@ body {
 
 :root {
   font-family:
-    Inter,
-    "Segoe UI",
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
+    'Poppins', sans-serif;
 
   color: #38283b;
   background: #f4ece8;
@@ -832,7 +832,7 @@ input {
   display: inline-flex;
   align-items: center;
 
-  padding: 6px 11px;
+  padding: 2px 6px;
 
   border-radius: 999px;
 
@@ -875,7 +875,7 @@ input {
    MAIN GRID
 ========================================================= */
 
-.scanner-grid {
+/* .scanner-grid {
   display: grid;
 
   grid-template-columns:
@@ -884,6 +884,13 @@ input {
   gap: 24px;
 
   align-items: start;
+} */
+
+.single-scan-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 95%;
 }
 
 
@@ -2311,11 +2318,11 @@ input {
   border: 1px solid #b8d9bf;
 }
 
-.field-status.fail {
-  background: #fae4e5;
-  color: #bd3039;
+.field-status.review {
+  background: #fdffc9;
+  color: #c0ba00;
 
-  border: 1px solid #e9bfc2;
+  border: 1px solid #93902a;
 }
 
 .field-status.not-applicable {

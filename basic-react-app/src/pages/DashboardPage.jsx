@@ -166,8 +166,8 @@ export default function DashboardPage() {
     <div className="dashboard-page">
       <section className="dashboard-welcome">
         <div className="dashboard-welcome-copy">
-          <span className="dashboard-eyebrow">PACKSURE AI • LIVE COMPLIANCE</span>
-          <h1>Welcome to PackSure AI</h1>
+          <span className="dashboard-eyebrow">LabelGuard • LIVE COMPLIANCE</span>
+          <h1>Welcome to LabelGuard</h1>
           <p>
             Monitor packaged-commodity compliance, understand your latest scan
             activity, and identify recurring declaration issues from one place.
@@ -202,7 +202,6 @@ export default function DashboardPage() {
       <div className="dashboard-section-heading">
         <div>
           <h2>Compliance at a glance</h2>
-          <p>Insights calculated from the scans stored by your FastAPI backend.</p>
         </div>
         <button
           className="dashboard-refresh"

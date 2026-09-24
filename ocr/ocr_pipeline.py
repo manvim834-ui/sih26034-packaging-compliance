@@ -14,7 +14,7 @@ from collections import Counter
 
 import easyocr
 
-from .preprocessing import generate_variants, image_quality
+from preprocessing import generate_variants, image_quality
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +34,7 @@ def get_reader(languages=("en",), gpu=False):
     key = (tuple(sorted(set(languages))), bool(gpu))
 
     if key not in _readers:
-        logger.info(
-            "Loading EasyOCR model for languages=%s gpu=%s", key[0], gpu)
+        logger.info("Loading EasyOCR model for languages=%s gpu=%s", key[0], gpu)
         _readers[key] = easyocr.Reader(
             list(key[0]), gpu=gpu, verbose=False
         )

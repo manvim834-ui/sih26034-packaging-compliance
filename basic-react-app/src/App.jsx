@@ -523,10 +523,6 @@ function ScanProductPage() {
             className={scanMode === "multiple" ? "active" : ""}
             onClick={() => {
               setScanMode("multiple");
-              setImage(null);
-              setImageFile(null);
-              setScanned(false);
-              setScanResult(null);
             }}
           >
             Multiple Images
@@ -538,7 +534,7 @@ function ScanProductPage() {
 
       {/* SCANNER GRID */}
       {scanMode === "single" && (
-        <div className="scanner-grid">
+        <div className="single-scan-section">
           {/* ================= LEFT ================= */}
 
           <section className="panel">
@@ -843,7 +839,7 @@ function ScanProductPage() {
 
                   <div className="fields-grid">
 
-                    {Object.entries(scanResult.fields || {}).map(
+                    {Object.entries(scanResult.fields || {}).filter(([fieldName]) => fieldName !== "generic_name").map(
                       ([fieldName, fieldData]) => (
 
                         <div
@@ -860,11 +856,13 @@ function ScanProductPage() {
                               className={`field-status ${fieldData.status === "PASS"
                                 ? "pass"
                                 : fieldData.status === "FAIL"
-                                  ? "fail"
+                                  ? "review"
                                   : "not-applicable"
                                 }`}
                             >
-                              {fieldData.status?.replaceAll("_", " ")}
+                              {fieldData.status === "FAIL"
+                                ? "Review"
+                                : fieldData.status?.replaceAll("_", " ")}
                             </span>
 
                           </div>
@@ -1061,8 +1059,8 @@ function ScanProductPage() {
 
                 <div
                   className={`overall-status ${batchResult.overall_status === "COMPLIANT"
-                      ? "compliant"
-                      : "non-compliant"
+                    ? "compliant"
+                    : "non-compliant"
                     }`}
                 >
                   {batchResult.overall_status?.replaceAll(
@@ -1103,7 +1101,7 @@ function ScanProductPage() {
 
                   {Object.entries(
                     batchResult.fields || {}
-                  ).map(([fieldName, fieldData]) => (
+                  ).filter(([fieldName]) => fieldName !== "generic_name").map(([fieldName, fieldData]) => (
 
                     <div
                       className="field-card"
@@ -1118,16 +1116,15 @@ function ScanProductPage() {
 
                         <span
                           className={`field-status ${fieldData.status === "PASS"
-                              ? "pass"
-                              : fieldData.status === "FAIL"
-                                ? "fail"
-                                : "not-applicable"
+                            ? "pass"
+                            : fieldData.status === "FAIL"
+                              ? "review"
+                              : "not-applicable"
                             }`}
                         >
-                          {fieldData.status?.replaceAll(
-                            "_",
-                            " "
-                          )}
+                          {fieldData.status === "FAIL"
+                            ? "Needs Human Review"
+                            : fieldData.status?.replaceAll("_", " ")}
                         </span>
 
                       </div>

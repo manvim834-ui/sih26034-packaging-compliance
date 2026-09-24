@@ -37,6 +37,8 @@ def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
     from ocr.ocr_pipeline import run_ocr_pipeline
     from rules.classifier import classify_package
     from rules.rule_engine import run_rule_engine
+    from rules.ingredient_checker import check_banned_ingredients
+    from rules.tampering_detector import detect_mrp_tampering
 
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(
@@ -53,24 +55,42 @@ def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
         except Exception as e:
             raise HTTPException(
                 status_code=422, detail=f"Could not process image: {str(e)}")
+
+        if ocr_result["status"] == "no_text_detected":
+            return {
+                "scan_id": None,
+                "overall_status": "no_text_detected",
+                "message": "No readable text was found on this image. Try a clearer, well-lit photo.",
+                "fields": {}
+            }
+
+        package_type = classify_package(ocr_result["lines"])
+        compliance_result = run_rule_engine(
+            ocr_result["lines"], package_type=package_type)
+        fields = compliance_result["fields"]
+
+        ocr_text = "\n".join(
+            line.get("text", "") for line in ocr_result["lines"] if line.get("text")
+        )
+        ingredient_result = check_banned_ingredients(ocr_text)
+
+        mrp_bbox = None
+        for line in ocr_result["lines"]:
+            if line.get("candidate_field") == "mrp" or "mrp" in (line.get("candidate_fields") or []):
+                mrp_bbox = line.get("bbox")
+                break
+
+        tampering_result = detect_mrp_tampering(temp_filename, mrp_bbox)
+
+        fields["banned_ingredient_check"] = ingredient_result
+        fields["mrp_tampering_check"] = tampering_result
+
     finally:
         os.remove(temp_filename)
 
-    if ocr_result["status"] == "no_text_detected":
-        return {
-            "scan_id": None,
-            "overall_status": "no_text_detected",
-            "message": "No readable text was found on this image. Try a clearer, well-lit photo.",
-            "fields": {}
-        }
-
-    package_type = classify_package(ocr_result["lines"])
-    compliance_result = run_rule_engine(
-        ocr_result["lines"], package_type=package_type)
-
-    fields = compliance_result["fields"]
     overall_status = compliance_result["overall_verdict"]
-    failed_fields = [f for f, r in fields.items() if r["status"] == "FAIL"]
+    failed_fields = [f for f, r in fields.items() if isinstance(
+        r, dict) and r.get("status") == "FAIL"]
     violation_type = ", ".join(failed_fields) if failed_fields else None
 
     scan_id = uuid.uuid4().hex[:8]
@@ -79,7 +99,7 @@ def scan(file: UploadFile = File(...), db: Session = Depends(get_db)):
         scan_id=scan_id,
         product_id="unknown",
         product_name="unknown",
-        category=package_type,
+        category="unknown",
         overall_status=overall_status,
         violation_type=violation_type,
         fields_json=json.dumps(fields),

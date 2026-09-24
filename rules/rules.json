@@ -19,9 +19,7 @@
       "description": "Online/e-commerce listing"
     }
   },
-
   "fields": {
-
     "manufacturer_info": {
       "required": true,
       "applies_when": [
@@ -44,7 +42,6 @@
         ]
       }
     },
-
     "generic_name": {
       "required": true,
       "applies_when": [
@@ -61,7 +58,6 @@
         "multiple_products_require_each_name_and_quantity": true
       }
     },
-
     "net_quantity": {
       "required": true,
       "applies_when": [
@@ -91,7 +87,6 @@
         ]
       }
     },
-
     "mfg_date": {
       "required": true,
       "applies_when": [
@@ -111,7 +106,6 @@
         "seeds"
       ]
     },
-
     "mrp": {
       "required": true,
       "applies_when": [
@@ -139,7 +133,6 @@
         "domestic_lpg_cylinders"
       ]
     },
-
     "consumer_care": {
       "required": true,
       "applies_when": [
@@ -158,7 +151,6 @@
         "email_if_available": true
       }
     },
-
     "unit_sale_price": {
       "required": true,
       "applies_when": [
@@ -187,7 +179,6 @@
         "alcoholic_beverage_or_spirituous_liquor"
       ]
     },
-
     "country_of_origin": {
       "required": true,
       "applies_when": [
@@ -202,7 +193,6 @@
       }
     }
   },
-
   "wholesale_rules": {
     "legal_reference": "Rule 24",
     "required_declarations": [
@@ -216,7 +206,6 @@
       "unit_sale_price"
     ]
   },
-
   "exemptions": {
     "full_chapter_ii": [
       {
@@ -230,7 +219,6 @@
         "legal_reference": "Rule 3"
       }
     ],
-
     "rule_26": [
       {
         "id": "very_small_package",
@@ -259,7 +247,6 @@
       }
     ]
   },
-
   "field_specific_exemptions": {
     "mfg_date": [
       {
@@ -283,7 +270,6 @@
         "legal_reference": "Seeds Act, 1966"
       }
     ],
-
     "mrp": [
       {
         "product_type": "domestic_lpg_cylinder",
@@ -291,7 +277,6 @@
       }
     ]
   },
-
   "photo_check_scope": {
     "manual_review_only": [
       {
@@ -311,6 +296,26 @@
         "legal_reference": "First Schedule",
         "reason": "Requires physically weighing or measuring the product"
       }
+    ]
+  },
+  "banned_ingredient_rules": {
+    "enabled": true,
+    "legal_reference": "FSSAI Act, 2006 / applicable FSSAI regulations; CDSCO applicable restricted-substance requirements",
+    "description": "Checks extracted ingredient text against a configurable restricted-substance list",
+    "restricted_ingredients": [
+      "ingredient_name_1",
+      "ingredient_name_2",
+      "ingredient_name_3"
+    ]
+  },
+  "tampering_rules": {
+    "enabled": true,
+    "legal_reference": "Rule 6(3), Legal Metrology (Packaged Commodities) Rules, 2011",
+    "description": "Detects potential covering or alteration around the MRP declaration",
+    "checks": [
+      "mrp_region_occlusion",
+      "sticker_like_region_near_mrp",
+      "text_region_change_near_mrp"
     ]
   }
 }
